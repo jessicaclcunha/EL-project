@@ -276,41 +276,41 @@ Total: 40 terminais
 
 | Não-Terminal | FIRST | Anulável | FOLLOW |
 |--------------|-------|----------|--------|
-| **Program** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | ❌ | {$} |
-| **StatementList** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | ❌ | {}, $} |
-| **StatementList'** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | ✅ | {}, $} |
-| **Statement** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **VarDecl** | {let, const, var} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **VarKind** | {let, const, var} | ❌ | {ID} |
-| **VarInit** | {=} | ✅ | {;} |
-| **Expr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {;, ), ,} |
-| **AssignmentExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {;, ), ,} |
-| **AssignOp'** | {=} | ✅ | {;, ), ,} |
-| **LogicalOrExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {=, ;, ), ,} |
-| **LogicalOrExpr'** | {\|\|} | ✅ | {=, ;, ), ,} |
-| **LogicalAndExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {\|\|, =, ;, ), ,} |
-| **LogicalAndExpr'** | {&&} | ✅ | {\|\|, =, ;, ), ,} |
-| **EqualityExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {&&, \|\|, =, ;, ), ,} |
-| **EqualityExpr'** | {==, ===, !=, !==} | ✅ | {&&, \|\|, =, ;, ), ,} |
-| **EqualityOp** | {==, ===, !=, !==} | ❌ | {!, -, ID, NUMBER, STRING, true, false, null, (} |
-| **RelationalExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **RelationalExpr'** | {<, >, <=, >=} | ✅ | {==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **RelationalOp** | {<, >, <=, >=} | ❌ | {!, -, ID, NUMBER, STRING, true, false, null, (} |
-| **AdditiveExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {<, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **AdditiveExpr'** | {+, -} | ✅ | {<, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **MultiplicativeExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {+, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **MultiplicativeExpr'** | {*, /, %} | ✅ | {+, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **UnaryExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {*, /, %, +, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **PrimaryExpr** | {ID, NUMBER, STRING, true, false, null, (} | ❌ | {*, /, %, +, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
-| **FunctionDecl** | {function} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **ParamList** | {ID} | ✅ | {)} |
-| **MoreParams** | {,} | ✅ | {)} |
-| **IfStmt** | {if} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **ElseClause** | {else} | ✅ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **WhileStmt** | {while} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **BlockStmt** | {{} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **ReturnStmt** | {return} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
-| **ExprStmt** | {!, -, ID, NUMBER, STRING, true, false, null, (} | ❌ | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **Program** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | não | {$} |
+| **StatementList** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | não | {}, $} |
+| **StatementList'** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | sim | {}, $} |
+| **Statement** | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **VarDecl** | {let, const, var} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **VarKind** | {let, const, var} | não | {ID} |
+| **VarInit** | {=} | sim | {;} |
+| **Expr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {;, ), ,} |
+| **AssignmentExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {;, ), ,} |
+| **AssignOp'** | {=} | sim | {;, ), ,} |
+| **LogicalOrExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {=, ;, ), ,} |
+| **LogicalOrExpr'** | {\|\|} | sim | {=, ;, ), ,} |
+| **LogicalAndExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {\|\|, =, ;, ), ,} |
+| **LogicalAndExpr'** | {&&} | sim | {\|\|, =, ;, ), ,} |
+| **EqualityExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {&&, \|\|, =, ;, ), ,} |
+| **EqualityExpr'** | {==, ===, !=, !==} | sim | {&&, \|\|, =, ;, ), ,} |
+| **EqualityOp** | {==, ===, !=, !==} | não | {!, -, ID, NUMBER, STRING, true, false, null, (} |
+| **RelationalExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **RelationalExpr'** | {<, >, <=, >=} | sim | {==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **RelationalOp** | {<, >, <=, >=} | não | {!, -, ID, NUMBER, STRING, true, false, null, (} |
+| **AdditiveExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {<, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **AdditiveExpr'** | {+, -} | sim | {<, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **MultiplicativeExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {+, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **MultiplicativeExpr'** | {*, /, %} | sim | {+, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **UnaryExpr** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {*, /, %, +, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **PrimaryExpr** | {ID, NUMBER, STRING, true, false, null, (} | não | {*, /, %, +, -, <, >, <=, >=, ==, ===, !=, !==, &&, \|\|, =, ;, ), ,} |
+| **FunctionDecl** | {function} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **ParamList** | {ID} | sim | {)} |
+| **MoreParams** | {,} | sim | {)} |
+| **IfStmt** | {if} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **ElseClause** | {else} | sim | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **WhileStmt** | {while} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **BlockStmt** | {{} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **ReturnStmt** | {return} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
+| **ExprStmt** | {!, -, ID, NUMBER, STRING, true, false, null, (} | não | {let, const, var, !, -, ID, NUMBER, STRING, true, false, null, (, {, if, return, function, while, }, $, else} |
 
 ---
 
@@ -353,4 +353,3 @@ Total: 40 terminais
 | **BlockStmt** | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 71 | | | | | | | |
 | **ReturnStmt** | | | | | | 72 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
 | **ExprStmt** | | | | | | | | | 73 | 73 | 73 | | | | | | | | | | | | 73 | | 73 | | | | 73 | | | | | | 73 | 73 | 73 | |
-
