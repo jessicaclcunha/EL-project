@@ -1,0 +1,5 @@
+start: S
+
+S → A B
+A → 'a' | 'a' 'b'
+B → 'c' | ε

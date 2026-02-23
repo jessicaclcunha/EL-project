@@ -1,0 +1,5 @@
+start: Lista
+
+Lista -> '[' ']' | '[' ELems ']'
+ELems -> Elems ',' Elem | Elem
+Elem -> int
