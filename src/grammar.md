@@ -1,19 +1,33 @@
-Grammar   → 'start:' NonTerm NEWLINE RuleList
+Spec          -> Axioma RuleList TokenSection
 
-RuleList  → Rule RuleList 
-        | Rule
+Axioma        -> "start" ":" NonTerm
 
-Rule      → NonTerm '→' AltList NEWLINE
+RuleList      -> Rule RuleList
+               | epsilon
 
-AltList   → Seq 
-        | Seq '|' AltList
+Rule          -> NonTerm "->" AltList
 
-Seq       → Symbol Seq 
-        | ε
+AltList       -> Body AltList'
+AltList'      -> "|" Body AltList'
+               | epsilon
 
-Symbol    → NonTerm 
-        | Term 
-        | 'ε'
+Body          -> Symbol SymbolList
+               | epsilon
 
-NonTerm   → IDENTIFIER
-Term      → QUOTED_STRING
+SymbolList    -> Symbol SymbolList
+               | epsilon
+
+Symbol        -> NonTerm
+               | TERMINAL_NAME
+               | STRING
+
+TokenSection  -> TokenDecl TokenSection
+               | epsilon
+
+TokenDecl     -> TERMINAL_NAME "=" REGEX
+
+// Casos especiais — definições léxicas
+NonTerm       -> [A-Z][a-zA-Z0-9]*'*
+TERMINAL_NAME -> [A-Z][A-Z0-9_]*
+REGEX         -> "/" [^/]+ "/"
+STRING        -> "'" [^']* "'" | '"' [^"]* '"'

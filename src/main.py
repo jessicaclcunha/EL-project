@@ -11,13 +11,20 @@ from gp_analysis import *
 EXAMPLE_GRAMMAR = """\
 start: Program
 
-Program   → StmtList
-StmtList  → Stmt StmtList'
-StmtList' → ';' Stmt StmtList' | ε
-Stmt      → id ':=' Expr
-Expr      → Term Expr'
-Expr'     → '+' Term Expr' | ε
-Term      → id | number
+Program    -> StmtList
+StmtList   -> Stmt StmtListR
+StmtListR  -> SEMI Stmt StmtListR | epsilon
+Stmt       -> ID ASSIGN Expr
+Expr       -> Term ExprR
+ExprR      -> PLUS Term ExprR | epsilon
+Term       -> ID | NUMBER
+
+
+ID     = /[a-zA-Z_][a-zA-Z0-9_]*/
+NUMBER = /[0-9]+/
+PLUS   = /\\+/
+SEMI   = /;/
+ASSIGN = /:=/
 """
 
 def run_pipeline(source):
@@ -35,8 +42,9 @@ def run_pipeline(source):
     grammar.print_tree()
 
     print(f"\nSímbolo inicial : {grammar.get_start()}")
-    print(f"Não-terminais   : {sorted(grammar.get_nonterminals())}")
-    print(f"Terminais       : {sorted(grammar.get_terminals())}")
+    print(f"Não-terminais   : [{', '.join(sorted(grammar.get_nonterminals()))}]")
+    print(f"Terminais       : [{', '.join(sorted(grammar.get_terminals()))}]")
+    print(f"Padrões léxicos : {grammar.get_token_patterns()}")
 
     print(f"\n{sep}")
     print(" FASE 2 — Conjuntos FIRST e FOLLOW")
@@ -52,6 +60,9 @@ def run_pipeline(source):
 
     conflicts = check_ll1(grammar, first, follow)
     print_conflicts(conflicts)
+
+    suggestions = suggest_fixes(grammar, conflicts)
+    print_suggestions(suggestions)
 
     print(f"\n{sep}")
     print(" FASE 4 — Tabela de parsing LL(1)")

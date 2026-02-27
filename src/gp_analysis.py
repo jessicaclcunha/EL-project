@@ -1,4 +1,4 @@
-from gp_ast import GrammarNode, SeqNode, SymbolNode
+from gp_ast import SpecNode, SeqNode, SymbolNode
 
 
 def compute_first(grammar):
@@ -103,7 +103,16 @@ def check_ll1(grammar, first, follow):
                     })
 
             if 'ε' in seq_firsts[i]:
-                intersection = (seq_firsts[i] - {'ε'}) & follow[A]
+                # Se esta alternativa pode derivar ε, verificar conflito com FOLLOW(A)
+                # O conflito existe se algum terminal do FOLLOW(A) também aparece
+                # no FIRST de outra alternativa (ou seja, haveria ambiguidade)
+                all_other_firsts = set()
+                for j in range(n):
+                    if j != i:
+                        all_other_firsts |= (seq_firsts[j] - {'ε'})
+                intersection = follow[A] & all_other_firsts
+                # Também verificar FIRST(seq_i) sem ε contra FOLLOW(A)
+                intersection |= (seq_firsts[i] - {'ε'}) & follow[A]
                 if intersection:
                     conflicts.append({
                         'type': 'FIRST/FOLLOW',
@@ -154,7 +163,7 @@ def print_conflicts(conflicts):
         print(f"  [{i}] Conflito {c['type']} em  {c['nonterminal']}")
         for alt in c['alts']:
             print(f"       Produção: {c['nonterminal']} → {alt}")
-        print(f"       Símbolos em conflito: {c['symbols']}")
+        print(f"       Símbolos em conflito: {{ {', '.join(sorted(c['symbols']))} }}")
         print()
 
 
@@ -183,3 +192,215 @@ def print_parse_table(table, grammar):
             else:
                 row += f"{'[CONFLITO]':^{col_w}}"
         print(row)
+
+# ---------------------------------------------------------------------------
+# Correção de conflitos
+# ---------------------------------------------------------------------------
+
+def _seq_to_str(symbols):
+    """Representa uma sequência de símbolos como string legível."""
+    return ' '.join(s.get_value() for s in symbols) if symbols else 'ε'
+
+
+def _get_first_symbol(seq):
+    """Devolve o valor do primeiro símbolo de uma sequência (ou None se vazia)."""
+    if seq.symbols:
+        return seq.symbols[0].get_value()
+    return None
+
+
+def left_factor(rule_name, sequences):
+    """
+    Fatorização à esquerda para um não-terminal com conflito FIRST/FIRST.
+
+    Agrupa alternativas pelo primeiro símbolo comum e cria novas regras.
+    Devolve lista de strings com as novas produções.
+    """
+    # Agrupar sequências pelo primeiro símbolo
+    groups = {}
+    for seq in sequences:
+        first_sym = _get_first_symbol(seq)
+        key = first_sym if first_sym else 'ε'
+        groups.setdefault(key, []).append(seq)
+
+    new_rules = []
+    single = []
+    factored = []
+    prime_counter = [0]  # contador para gerar nomes únicos
+
+    def next_prime():
+        prime_counter[0] += 1
+        return f"{rule_name}'" if prime_counter[0] == 1 else f"{rule_name}{'_' * prime_counter[0]}"
+
+    for key, seqs in groups.items():
+        if len(seqs) == 1:
+            single.append(_seq_to_str(seqs[0].symbols))
+        else:
+            prefix = _longest_common_prefix(seqs)
+            prefix_str = ' '.join(s.get_value() for s in prefix)
+            remainders = []
+            for seq in seqs:
+                rest = seq.symbols[len(prefix):]
+                remainders.append(_seq_to_str(rest) if rest else 'ε')
+            prime_name = next_prime()
+            factored.append((prefix_str, prime_name, remainders))
+
+    # Construir regra principal
+    main_alts = single[:]
+    for prefix_str, prime_name, _ in factored:
+        main_alts.append(f"{prefix_str} {prime_name}")
+
+    new_rules.append(f"{rule_name} -> {' | '.join(main_alts)}")
+
+    # Construir regras auxiliares
+    for _, prime_name, remainders in factored:
+        new_rules.append(f"{prime_name} -> {' | '.join(remainders)}")
+
+    return new_rules
+
+
+def _longest_common_prefix(sequences):
+    """Encontra o prefixo comum mais longo entre várias sequências de símbolos."""
+    if not sequences:
+        return []
+    min_len = min(len(seq.symbols) for seq in sequences)
+    prefix = []
+    for i in range(min_len):
+        val = sequences[0].symbols[i].get_value()
+        if all(seq.symbols[i].get_value() == val for seq in sequences):
+            prefix.append(sequences[0].symbols[i])
+        else:
+            break
+    return prefix
+
+
+def eliminate_left_recursion(rule_name, sequences):
+    """
+    Elimina recursividade à esquerda directa para um não-terminal.
+
+    A -> A α | β   transforma-se em:
+    A  -> β A'
+    A' -> α A' | ε
+    """
+    prime = f"{rule_name}'"
+    recursive = []    # sequências que começam por rule_name
+    nonrecursive = [] # as restantes
+
+    for seq in sequences:
+        if seq.symbols and seq.symbols[0].get_value() == rule_name:
+            recursive.append(seq)
+        else:
+            nonrecursive.append(seq)
+
+    if not recursive:
+        return None  # não há recursividade à esquerda
+
+    new_rules = []
+
+    # A -> β A'
+    base_alts = [f"{_seq_to_str(seq.symbols)} {prime}" for seq in nonrecursive]
+    new_rules.append(f"{rule_name} -> {' | '.join(base_alts)}")
+
+    # A' -> α A' | ε
+    rec_alts = [f"{_seq_to_str(seq.symbols[1:])} {prime}" for seq in recursive]
+    rec_alts.append('ε')
+    new_rules.append(f"{prime} -> {' | '.join(rec_alts)}")
+
+    return new_rules
+
+
+def suggest_fixes(grammar, conflicts):
+    """
+    Para cada conflito detectado, sugere a transformação gramatical necessária.
+    Devolve uma lista de dicionários com o diagnóstico e as regras corrigidas.
+    """
+    if not conflicts:
+        return []
+
+    suggestions = []
+    seen = set()
+
+    for c in conflicts:
+        A = c['nonterminal']
+        if A in seen:
+            continue
+        seen.add(A)
+
+        rule = next(r for r in grammar.get_rules() if r.get_head_name() == A)
+        seqs = rule.altlist.sequences
+
+        if c['type'] == 'FIRST/FIRST':
+            result = eliminate_left_recursion(A, seqs)
+            if result:
+                suggestions.append({
+                    'nonterminal': A,
+                    'type': 'FIRST/FIRST',
+                    'technique': 'Eliminação de recursividade à esquerda',
+                    'new_rules': result,
+                })
+            else:
+                new_rules = left_factor(A, seqs)
+                # Verificar se a fatorização realmente alterou algo
+                original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
+                if len(new_rules) == 1 and new_rules[0] == original:
+                    suggestions.append({
+                        'nonterminal': A,
+                        'type': 'FIRST/FIRST',
+                        'technique': 'Sem correção automática possível',
+                        'new_rules': ['⚠  A gramática pode ser intrinsecamente ambígua neste não-terminal.'],
+                    })
+                else:
+                    suggestions.append({
+                        'nonterminal': A,
+                        'type': 'FIRST/FIRST',
+                        'technique': 'Fatorização à esquerda',
+                        'new_rules': new_rules,
+                    })
+
+        elif c['type'] == 'FIRST/FOLLOW':
+            result = eliminate_left_recursion(A, seqs)
+            if result:
+                suggestions.append({
+                    'nonterminal': A,
+                    'type': 'FIRST/FOLLOW',
+                    'technique': 'Eliminação de recursividade à esquerda',
+                    'new_rules': result,
+                })
+            else:
+                new_rules = left_factor(A, seqs)
+                original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
+                if len(new_rules) == 1 and new_rules[0] == original:
+                    suggestions.append({
+                        'nonterminal': A,
+                        'type': 'FIRST/FOLLOW',
+                        'technique': 'Sem correção automática possível',
+                        'new_rules': ['⚠  Conflito FIRST/FOLLOW sem prefixo comum — a gramática pode ser intrinsecamente ambígua.'],
+                    })
+                else:
+                    suggestions.append({
+                        'nonterminal': A,
+                        'type': 'FIRST/FOLLOW',
+                        'technique': 'Fatorização à esquerda (prefixo anulável)',
+                        'new_rules': new_rules,
+                    })
+
+    return suggestions
+
+
+def print_suggestions(suggestions):
+    """Imprime as sugestões de correção de forma legível."""
+    if not suggestions:
+        return
+
+    print(f"\n{'─' * 60}")
+    print(" SUGESTÕES DE CORREÇÃO")
+    print(f"{'─' * 60}\n")
+
+    for s in suggestions:
+        print(f"  Não-terminal : {s['nonterminal']}")
+        print(f"  Conflito     : {s['type']}")
+        print(f"  Técnica      : {s['technique']}")
+        print(f"  Regras novas :")
+        for rule in s['new_rules']:
+            print(f"    {rule}")
+        print()
