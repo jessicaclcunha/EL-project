@@ -6,9 +6,9 @@ _tabversion = '3.10'
 
 _lr_method = 'LALR'
 
-_lr_signature = 'ARROW EPSILON IDENTIFIER NEWLINE PIPE QUOTED_STRING START_KWgrammar : START_KW IDENTIFIER newlines rulelistrulelist : rule rulelistrulelist : rulerule : IDENTIFIER ARROW altlist newlines\n            | IDENTIFIER ARROW altlistaltlist : seq PIPE altlistaltlist : seqseq : symbol seqseq : symbol : IDENTIFIERsymbol : QUOTED_STRINGsymbol : EPSILONnewlines : NEWLINE\n               | NEWLINE newlines'
+_lr_signature = 'specARROW COLON EPSILON EQUALS NEWLINE NONTERM PIPE REGEX START STRING TERMINAL_NAMEspec : axioma newlines rulelist tokensectionaxioma : START COLON NONTERMrulelist : rule rulelistrulelist : rule : NONTERM ARROW altlist newlinesrule : NONTERM ARROW altlistaltlist : body altlist_restaltlist_rest : PIPE body altlist_restaltlist_rest : body : symbol symbollistbody : EPSILONsymbollist : symbol symbollistsymbollist : symbol : NONTERMsymbol : STRINGsymbol : TERMINAL_NAMEtokensection : tokendecl tokensectiontokensection : tokendecl : TERMINAL_NAME EQUALS REGEX newlinestokendecl : TERMINAL_NAME EQUALS REGEXnewlines : NEWLINE\n               | NEWLINE newlines'
     
-_lr_action_items = {'START_KW':([0,],[2,]),'$end':([1,5,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,],[0,-13,-1,-3,-14,-9,-2,-10,-5,-7,-9,-11,-12,-4,-9,-8,-6,]),'IDENTIFIER':([2,4,5,8,9,10,12,13,14,15,16,17,18,19,20,21,],[3,6,-13,6,-14,12,-10,-5,-7,12,-11,-12,-4,12,-8,-6,]),'NEWLINE':([3,5,10,12,13,14,15,16,17,19,20,21,],[5,5,-9,-10,5,-7,-9,-11,-12,-9,-8,-6,]),'ARROW':([6,],[10,]),'PIPE':([10,12,14,15,16,17,19,20,],[-9,-10,19,-9,-11,-12,-9,-8,]),'QUOTED_STRING':([10,12,15,16,17,19,],[16,-10,16,-11,-12,16,]),'EPSILON':([10,12,15,16,17,19,],[17,-10,17,-11,-12,17,]),}
+_lr_action_items = {'START':([0,],[3,]),'$end':([1,4,5,7,8,10,12,13,15,17,19,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,],[0,-4,-21,-18,-4,-22,-1,-18,-3,-17,-14,-6,-9,-13,-11,-15,-16,-20,-5,-7,-13,-10,-19,-9,-12,-8,]),'NEWLINE':([2,5,11,19,20,21,22,23,24,25,26,28,30,31,33,34,35,],[5,5,-2,-14,5,-9,-13,-11,-15,-16,5,-7,-13,-10,-9,-12,-8,]),'COLON':([3,],[6,]),'TERMINAL_NAME':([4,5,7,8,10,13,15,16,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,],[-4,-21,14,-4,-22,14,-3,25,-14,-6,-9,25,-11,-15,-16,-20,-5,-7,25,25,-10,-19,-9,-12,-8,]),'NONTERM':([4,5,6,8,10,16,19,20,21,22,23,24,25,27,28,29,30,31,33,34,35,],[9,-21,11,9,-22,19,-14,-6,-9,19,-11,-15,-16,-5,-7,19,19,-10,-9,-12,-8,]),'ARROW':([9,],[16,]),'EQUALS':([14,],[18,]),'EPSILON':([16,29,],[23,23,]),'STRING':([16,19,22,24,25,29,30,],[24,-14,24,-15,-16,24,24,]),'REGEX':([18,],[26,]),'PIPE':([19,21,22,23,24,25,30,31,33,34,],[-14,29,-13,-11,-15,-16,-13,-10,29,-12,]),}
 
 _lr_action = {}
 for _k, _v in _lr_action_items.items():
@@ -17,7 +17,7 @@ for _k, _v in _lr_action_items.items():
       _lr_action[_x][_k] = _y
 del _lr_action_items
 
-_lr_goto_items = {'grammar':([0,],[1,]),'newlines':([3,5,13,],[4,9,18,]),'rulelist':([4,8,],[7,11,]),'rule':([4,8,],[8,8,]),'altlist':([10,19,],[13,21,]),'seq':([10,15,19,],[14,20,14,]),'symbol':([10,15,19,],[15,15,15,]),}
+_lr_goto_items = {'spec':([0,],[1,]),'axioma':([0,],[2,]),'newlines':([2,5,20,26,],[4,10,27,32,]),'rulelist':([4,8,],[7,15,]),'rule':([4,8,],[8,8,]),'tokensection':([7,13,],[12,17,]),'tokendecl':([7,13,],[13,13,]),'altlist':([16,],[20,]),'body':([16,29,],[21,33,]),'symbol':([16,22,29,30,],[22,30,22,30,]),'altlist_rest':([21,33,],[28,35,]),'symbollist':([22,30,],[31,34,]),}
 
 _lr_goto = {}
 for _k, _v in _lr_goto_items.items():
@@ -26,19 +26,27 @@ for _k, _v in _lr_goto_items.items():
        _lr_goto[_x][_k] = _y
 del _lr_goto_items
 _lr_productions = [
-  ("S' -> grammar","S'",1,None,None,None),
-  ('grammar -> START_KW IDENTIFIER newlines rulelist','grammar',4,'p_grammar','gp_parser.py',12),
-  ('rulelist -> rule rulelist','rulelist',2,'p_rulelist_multiple','gp_parser.py',20),
-  ('rulelist -> rule','rulelist',1,'p_rulelist_single','gp_parser.py',25),
-  ('rule -> IDENTIFIER ARROW altlist newlines','rule',4,'p_rule','gp_parser.py',30),
-  ('rule -> IDENTIFIER ARROW altlist','rule',3,'p_rule','gp_parser.py',31),
-  ('altlist -> seq PIPE altlist','altlist',3,'p_altlist_multiple','gp_parser.py',40),
-  ('altlist -> seq','altlist',1,'p_altlist_single','gp_parser.py',45),
-  ('seq -> symbol seq','seq',2,'p_seq_symbol','gp_parser.py',50),
-  ('seq -> <empty>','seq',0,'p_seq_empty','gp_parser.py',55),
-  ('symbol -> IDENTIFIER','symbol',1,'p_symbol_identifier','gp_parser.py',60),
-  ('symbol -> QUOTED_STRING','symbol',1,'p_symbol_quoted','gp_parser.py',65),
-  ('symbol -> EPSILON','symbol',1,'p_symbol_epsilon','gp_parser.py',70),
-  ('newlines -> NEWLINE','newlines',1,'p_newlines','gp_parser.py',75),
-  ('newlines -> NEWLINE newlines','newlines',2,'p_newlines','gp_parser.py',76),
+  ("S' -> spec","S'",1,None,None,None),
+  ('spec -> axioma newlines rulelist tokensection','spec',4,'p_spec','gp_parser.py',60),
+  ('axioma -> START COLON NONTERM','axioma',3,'p_axioma','gp_parser.py',73),
+  ('rulelist -> rule rulelist','rulelist',2,'p_rulelist_nonempty','gp_parser.py',82),
+  ('rulelist -> <empty>','rulelist',0,'p_rulelist_empty','gp_parser.py',87),
+  ('rule -> NONTERM ARROW altlist newlines','rule',4,'p_rule_with_newline','gp_parser.py',96),
+  ('rule -> NONTERM ARROW altlist','rule',3,'p_rule_without_newline','gp_parser.py',101),
+  ('altlist -> body altlist_rest','altlist',2,'p_altlist','gp_parser.py',111),
+  ('altlist_rest -> PIPE body altlist_rest','altlist_rest',3,'p_altlist_rest_nonempty','gp_parser.py',116),
+  ('altlist_rest -> <empty>','altlist_rest',0,'p_altlist_rest_empty','gp_parser.py',121),
+  ('body -> symbol symbollist','body',2,'p_body_symbols','gp_parser.py',130),
+  ('body -> EPSILON','body',1,'p_body_epsilon','gp_parser.py',135),
+  ('symbollist -> symbol symbollist','symbollist',2,'p_symbollist_nonempty','gp_parser.py',144),
+  ('symbollist -> <empty>','symbollist',0,'p_symbollist_empty','gp_parser.py',149),
+  ('symbol -> NONTERM','symbol',1,'p_symbol_nonterm','gp_parser.py',158),
+  ('symbol -> STRING','symbol',1,'p_symbol_quoted','gp_parser.py',163),
+  ('symbol -> TERMINAL_NAME','symbol',1,'p_symbol_terminal_name','gp_parser.py',168),
+  ('tokensection -> tokendecl tokensection','tokensection',2,'p_tokensection_nonempty','gp_parser.py',177),
+  ('tokensection -> <empty>','tokensection',0,'p_tokensection_empty','gp_parser.py',182),
+  ('tokendecl -> TERMINAL_NAME EQUALS REGEX newlines','tokendecl',4,'p_tokendecl_with_newline','gp_parser.py',187),
+  ('tokendecl -> TERMINAL_NAME EQUALS REGEX','tokendecl',3,'p_tokendecl_without_newline','gp_parser.py',192),
+  ('newlines -> NEWLINE','newlines',1,'p_newlines','gp_parser.py',202),
+  ('newlines -> NEWLINE newlines','newlines',2,'p_newlines','gp_parser.py',203),
 ]

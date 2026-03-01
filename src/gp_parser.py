@@ -1,29 +1,38 @@
 """
-Gramática da linguagem de especificação (Grammar Playground):
+Parser da linguagem de especificação (Grammar Playground)
 
-    Spec          -> Axioma RuleList TokenSection
+Gramática implementada (ver grammar.md para a especificação completa):
+
+    Spec          -> Axioma Newlines RuleList TokenSection
 
     Axioma        -> START COLON NONTERM
 
     RuleList      -> Rule RuleList | ε
-    Rule          -> NONTERM ARROW AltList newlines
+    Rule          -> NONTERM ARROW AltList Newlines
+                   | NONTERM ARROW AltList
 
-    AltList       -> Body AltList'
-    AltList'      -> PIPE Body AltList' | ε
+    AltList       -> Body AltListR
+    AltListR      -> PIPE Body AltListR | ε
 
-    Body          -> Symbol SymbolList | epsilon
+    Body          -> Symbol SymbolList | EPSILON
     SymbolList    -> Symbol SymbolList | ε
 
-    Symbol        -> NONTERM | TERMINAL_NAME
+    Symbol        -> NONTERM | TERMINAL_NAME | STRING
 
     TokenSection  -> TokenDecl TokenSection | ε
-    TokenDecl     -> TERMINAL_NAME EQUALS REGEX newlines
+    TokenDecl     -> TERMINAL_NAME EQUALS REGEX Newlines
+                   | TERMINAL_NAME EQUALS REGEX
+
+    Newlines      -> NEWLINE | NEWLINE Newlines
 
 Notas:
     - O axioma é declarado explicitamente com 'start: NonTerm'.
-      são TERMINAL_NAME declarados na TokenSection.
-    - As newlines delimitam o fim de Axioma, Rule e TokenDecl.
+    - Terminais nomeados (TUDO_MAIUSCULAS) devem ser declarados na TokenSection.
+    - Newlines delimitam o fim de regras e declarações de tokens.
     - Comentários (# ...) são ignorados pelo lexer.
+    - 'epsilon' e 'ε' são palavras reservadas.
+    - Regras do mesmo não-terminal em linhas separadas são fundidas
+      automaticamente após o parsing (ver _merge_rules).
 """
 
 import ply.yacc as yacc
@@ -37,12 +46,23 @@ from gp_ast import (
 
 
 # ---------------------------------------------------------------------------
+# Acumulação de erros
+# ---------------------------------------------------------------------------
+
+_parse_errors = []
+
+
+# ---------------------------------------------------------------------------
 # Spec
 # ---------------------------------------------------------------------------
 
 def p_spec(p):
     """spec : axioma newlines rulelist tokensection"""
-    p[0] = SpecNode(axioma=p[1], rulelist=RuleListNode(p[3]), tokensection=TokenSectionNode(p[4]))
+    p[0] = SpecNode(
+        axioma=p[1],
+        rulelist=RuleListNode(p[3]),
+        tokensection=TokenSectionNode(p[4]),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,18 +210,102 @@ def p_newlines(p):
 
 def p_error(p):
     if p:
-        print(f"[ERRO SINTÁTICO] Linha {p.lineno}: token inesperado '{p.value}' ({p.type})")
+        msg = f"[ERRO SINTÁTICO] Linha {p.lineno}: token inesperado '{p.value}' ({p.type})"
     else:
-        print("[ERRO SINTÁTICO] Fim de ficheiro inesperado")
+        msg = "[ERRO SINTÁTICO] Fim de ficheiro inesperado"
+    _parse_errors.append(msg)
+    print(msg)
 
 
 parser = yacc.yacc(start='spec')
 
 
+# ---------------------------------------------------------------------------
+# Fusão de regras do mesmo não-terminal
+# ---------------------------------------------------------------------------
+
+def _merge_rules(rules):
+    """
+    Funde regras com o mesmo não-terminal numa única RuleNode.
+
+    Se o utilizador escrever:
+        A -> x | y
+        A -> z
+
+    O parser cria dois RuleNode para A. Esta função funde-os num só:
+        A -> x | y | z
+
+    Isto é essencial para que check_ll1, suggest_fixes e build_parse_table
+    vejam todas as alternativas de um não-terminal de uma só vez.
+    A ordem das regras originais é preservada.
+    """
+    if not rules:
+        return rules
+
+    merged = {}   # nome → RuleNode
+    order = []    # preservar ordem de primeira aparição
+
+    for rule in rules:
+        name = rule.get_head_name()
+        if name in merged:
+            # Adicionar as alternativas à regra existente
+            merged[name].altlist.sequences.extend(rule.altlist.sequences)
+        else:
+            merged[name] = rule
+            order.append(name)
+
+    return [merged[name] for name in order]
+
+
+# ---------------------------------------------------------------------------
+# Função pública
+# ---------------------------------------------------------------------------
+
+_parse_warnings = []
+
+
 def parse_grammar(source: str) -> SpecNode | None:
     """
     Recebe o texto da gramática e devolve a ASA (SpecNode) ou None em caso de erro.
-    O axioma é declarado explicitamente via 'start: NonTerm'.
+
+    Passos:
+        1. Parsing (lexer + parser PLY)
+        2. Fusão de regras do mesmo não-terminal
+        3. Validação semântica
     """
+    _parse_errors.clear()
+    _parse_warnings.clear()
     lexer.lineno = 1
-    return parser.parse(source, lexer=lexer)
+    result = parser.parse(source, lexer=lexer)
+
+    if result is None:
+        return None
+
+    # Fundir regras do mesmo não-terminal
+    result.rulelist.rules = _merge_rules(result.rulelist.rules)
+
+    # Validação semântica
+    errors, warnings = result.validate()
+    for e in errors:
+        msg = f"[ERRO SEMÂNTICO] {e}"
+        _parse_errors.append(msg)
+        print(msg)
+    for w in warnings:
+        msg = f"[AVISO] {w}"
+        _parse_warnings.append(msg)
+        print(msg)
+
+    if errors:
+        return None
+
+    return result
+
+
+def get_parse_errors() -> list[str]:
+    """Devolve a lista de erros acumulados no último parse."""
+    return list(_parse_errors)
+
+
+def get_parse_warnings() -> list[str]:
+    """Devolve a lista de avisos acumulados no último parse."""
+    return list(_parse_warnings)

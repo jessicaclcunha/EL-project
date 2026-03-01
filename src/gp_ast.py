@@ -317,12 +317,24 @@ class SpecNode:
         return self.rulelist.rules
 
     def get_nonterminals(self):
+        """Devolve os NTs que têm regra definida (lado esquerdo de ->)."""
         return {r.get_head_name() for r in self.rulelist.rules}
+
+    def get_all_referenced_nonterminals(self):
+        """Devolve todos os NTs referenciados nos corpos das produções."""
+        referenced = set()
+        for rule in self.rulelist.rules:
+            for seq in rule.altlist.sequences:
+                for sym in seq.symbols:
+                    if isinstance(sym.child, IdentifierNode):
+                        referenced.add(sym.get_value())
+        return referenced
 
     def get_terminals(self):
         """
         Terminais = nomes declarados na TokenSection
-                  + quoted strings usadas inline nas produções.
+                  + quoted strings usadas inline nas produções
+                  + TERMINAL_NAME usados nos corpos das produções.
         """
         declared = {d.name.value for d in self.tokensection.decls}
         inline = set()
@@ -338,3 +350,81 @@ class SpecNode:
     def get_token_patterns(self):
         """Dicionário TERMINAL_NAME → padrão regex (só os declarados)."""
         return {d.name.value: d.regex.value for d in self.tokensection.decls}
+
+    def validate(self):
+        """
+        Validação semântica da gramática.
+
+        Verifica:
+            1. O símbolo inicial tem regra definida
+            2. Todos os NTs usados nos corpos das produções têm regra
+            3. Terminais nomeados usados nas regras estão declarados na TokenSection
+            4. Não há regras sem alternativas
+            5. Não há declarações de tokens duplicadas
+
+        Devolve:
+            (errors, warnings) — duas listas de strings.
+            errors   = problemas que impedem a análise (gramática inválida)
+            warnings = avisos que não impedem a análise mas podem indicar problemas
+        """
+        errors = []
+        warnings = []
+
+        defined_nts = self.get_nonterminals()
+        referenced_nts = self.get_all_referenced_nonterminals()
+        start = self.get_start()
+        declared_tokens = {d.name.value for d in self.tokensection.decls}
+
+        # 1. Símbolo inicial tem regra?
+        if start not in defined_nts:
+            errors.append(
+                f"O símbolo inicial '{start}' não tem nenhuma regra definida."
+            )
+
+        # 2. NTs usados nos corpos têm regra definida?
+        undefined_nts = referenced_nts - defined_nts
+        for nt in sorted(undefined_nts):
+            errors.append(
+                f"O não-terminal '{nt}' é usado nas produções mas não tem regra definida."
+            )
+
+        # 3. Terminais nomeados usados nas regras estão na TokenSection?
+        used_terminal_names = set()
+        for rule in self.rulelist.rules:
+            for seq in rule.altlist.sequences:
+                for sym in seq.symbols:
+                    if isinstance(sym.child, TerminalNameNode):
+                        used_terminal_names.add(sym.get_value())
+
+        undeclared = used_terminal_names - declared_tokens
+        for t in sorted(undeclared):
+            warnings.append(
+                f"O terminal '{t}' é usado nas produções mas não tem padrão regex "
+                f"declarado na TokenSection."
+            )
+
+        # 4. Regras sem alternativas?
+        for rule in self.rulelist.rules:
+            if not rule.altlist.sequences:
+                errors.append(
+                    f"A regra '{rule.get_head_name()}' não tem alternativas."
+                )
+
+        # 5. Declarações de tokens duplicadas?
+        seen_tokens = set()
+        for decl in self.tokensection.decls:
+            name = decl.name.value
+            if name in seen_tokens:
+                warnings.append(
+                    f"O terminal '{name}' está declarado mais que uma vez na TokenSection."
+                )
+            seen_tokens.add(name)
+
+        # 6. NTs definidos mas nunca usados (nem como start)?
+        unused_nts = defined_nts - referenced_nts - {start}
+        for nt in sorted(unused_nts):
+            warnings.append(
+                f"O não-terminal '{nt}' tem regra definida mas nunca é referenciado."
+            )
+
+        return errors, warnings

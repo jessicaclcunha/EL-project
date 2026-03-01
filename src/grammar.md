@@ -1,33 +1,77 @@
-Spec          -> Axioma RuleList TokenSection
+Spec          -> Axioma Newlines RuleList TokenSection
 
-Axioma        -> "start" ":" NonTerm
+Axioma        -> START COLON NONTERM
 
 RuleList      -> Rule RuleList
-               | epsilon
+               | ε
 
-Rule          -> NonTerm "->" AltList
+Rule          -> NONTERM ARROW AltList Newlines
+               | NONTERM ARROW AltList
 
-AltList       -> Body AltList'
-AltList'      -> "|" Body AltList'
-               | epsilon
+AltList       -> Body AltListR
+AltListR      -> PIPE Body AltListR
+               | ε
 
 Body          -> Symbol SymbolList
-               | epsilon
+               | EPSILON
 
 SymbolList    -> Symbol SymbolList
-               | epsilon
+               | ε
 
-Symbol        -> NonTerm
+Symbol        -> NONTERM
                | TERMINAL_NAME
                | STRING
 
 TokenSection  -> TokenDecl TokenSection
-               | epsilon
+               | ε
 
-TokenDecl     -> TERMINAL_NAME "=" REGEX
+TokenDecl     -> TERMINAL_NAME EQUALS REGEX Newlines
+               | TERMINAL_NAME EQUALS REGEX
 
-// Casos especiais — definições léxicas
-NonTerm       -> [A-Z][a-zA-Z0-9]*'*
-TERMINAL_NAME -> [A-Z][A-Z0-9_]*
-REGEX         -> "/" [^/]+ "/"
-STRING        -> "'" [^']* "'" | '"' [^"]* '"'
+Newlines      -> NEWLINE
+               | NEWLINE Newlines
+
+
+# ===== DEFINIÇÕES LÉXICAS =====
+#
+# START          →  'start' (palavra reservada)
+# EPSILON        →  'epsilon' | 'ε' (palavra reservada)
+# NONTERM        →  [A-Z][a-zA-Z0-9_]*'*  (letra maiúscula isolada ou PascalCase)
+#                   Nota: uma letra maiúscula isolada (S, A, B) é NONTERM.
+# TERMINAL_NAME  →  [A-Z][A-Z0-9_]+  (tudo maiúsculas, 2+ caracteres)
+# STRING         →  '[^']*' | "[^"]*"
+# REGEX          →  /[^/]+/
+# ARROW          →  '->' | '→'
+# PIPE           →  '|'
+# EQUALS         →  '='
+# COLON          →  ':'
+# NEWLINE        →  '\n'+
+#
+# Ignorados: espaços, tabs, comentários (# até fim da linha)
+#
+# ===== PRECEDÊNCIA DE CLASSIFICAÇÃO =====
+#
+# O identificador genérico [A-Za-z][A-Za-z0-9_]*'* é testado e depois
+# classificado por ordem:
+#   1. 'start'                         → START
+#   2. 'epsilon'                       → EPSILON
+#   3. [A-Z][A-Z0-9_]* com len >= 2   → TERMINAL_NAME
+#   4. Tudo o resto (incluindo letra maiúscula isolada) → NONTERM
+#
+# ===== EXEMPLO DE INPUT VÁLIDO =====
+#
+# start: Program
+#
+# Program    -> StmtList
+# StmtList   -> Stmt StmtListR
+# StmtListR  -> SEMI Stmt StmtListR | epsilon
+# Stmt       -> ID ASSIGN Expr
+# Expr       -> Term ExprR
+# ExprR      -> PLUS Term ExprR | epsilon
+# Term       -> ID | NUMBER
+#
+# ID     = /[a-zA-Z_][a-zA-Z0-9_]*/
+# NUMBER = /[0-9]+/
+# PLUS   = /\+/
+# SEMI   = /;/
+# ASSIGN = /:=/
