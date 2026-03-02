@@ -89,11 +89,11 @@ class TestLexer(unittest.TestCase):
         toks = tokenize("ExprR")
         self.assertEqual(toks, [('NONTERM', 'ExprR')])
 
-    def test_terminal_name(self):
-        """TUDO_MAIUSCULAS com 2+ chars deve ser TERMINAL_NAME."""
+    def test_terminal(self):
+        """TUDO_MAIUSCULAS com 2+ chars deve ser TERMINAL."""
         toks = tokenize("ID NUMBER PLUS")
         types = [t[0] for t in toks]
-        self.assertEqual(types, ['TERMINAL_NAME', 'TERMINAL_NAME', 'TERMINAL_NAME'])
+        self.assertEqual(types, ['TERMINAL', 'TERMINAL', 'TERMINAL'])
 
     def test_arrow(self):
         """'->' e '→' devem ser ARROW."""
@@ -142,14 +142,14 @@ class TestLexer(unittest.TestCase):
         toks = tokenize("ID # isto é um comentário\nNUMBER")
         types = [t[0] for t in toks]
         self.assertNotIn('COMMENT', types)
-        # Deve ter TERMINAL_NAME, NEWLINE, TERMINAL_NAME
-        self.assertEqual(types, ['TERMINAL_NAME', 'NEWLINE', 'TERMINAL_NAME'])
+        # Deve ter TERMINAL, NEWLINE, TERMINAL
+        self.assertEqual(types, ['TERMINAL', 'NEWLINE', 'TERMINAL'])
 
     def test_spaces_ignored(self):
         """Espaços e tabs devem ser ignorados."""
         toks = tokenize("  ID  \t  NUMBER  ")
         types = [t[0] for t in toks]
-        self.assertEqual(types, ['TERMINAL_NAME', 'TERMINAL_NAME'])
+        self.assertEqual(types, ['TERMINAL', 'TERMINAL'])
 
     def test_full_axiom_line(self):
         """Linha 'start: Program' deve dar START COLON NONTERM."""
@@ -160,15 +160,15 @@ class TestLexer(unittest.TestCase):
     def test_full_rule_line(self):
         """Linha 'Expr -> Term PLUS Expr' deve dar tokens corretos."""
         toks = tokenize("Expr -> Term PLUS Expr")
-        expected_types = ['NONTERM', 'ARROW', 'NONTERM', 'TERMINAL_NAME', 'NONTERM']
+        expected_types = ['NONTERM', 'ARROW', 'NONTERM', 'TERMINAL', 'NONTERM']
         types = [t[0] for t in toks]
         self.assertEqual(types, expected_types)
 
     def test_full_token_decl_line(self):
-        """Linha 'ID = /[a-z]+/' deve dar TERMINAL_NAME EQUALS REGEX."""
+        """Linha 'ID = /[a-z]+/' deve dar TERMINAL EQUALS REGEX."""
         toks = tokenize("ID = /[a-z]+/")
         types = [t[0] for t in toks]
-        self.assertEqual(types, ['TERMINAL_NAME', 'EQUALS', 'REGEX'])
+        self.assertEqual(types, ['TERMINAL', 'EQUALS', 'REGEX'])
 
     def test_epsilon_in_rule(self):
         """'epsilon' dentro de uma regra deve ser EPSILON."""

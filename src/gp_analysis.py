@@ -144,12 +144,21 @@ def build_parse_table(grammar, first, follow):
 
 def print_first_follow(first, follow):
     nts = sorted(first.keys())
-    print(f"{'NT':<15} {'FIRST':<40} FOLLOW")
-    print("─" * 78)
+    if not nts:
+        return
+
+    w_nt = max([len(nt) for nt in nts] + [2]) + 4
+    w_f  = max([len(', '.join(sorted(first[nt]))) for nt in nts] + [10] ) + 4
+
+    header = f"{'NT':<{w_nt}} {'FIRST':<{w_f + 8}} FOLLOW"
+    print(header)
+    
+    print("─" * (len(header) + 30))
     for nt in nts:
         f  = ', '.join(sorted(first[nt]))
         fw = ', '.join(sorted(follow[nt]))
-        print(f"{nt:<15} {{ {f:<38}}} {{ {fw} }}")
+        print(f"{nt:<{w_nt}} {{ {f:<{w_f}} }} {{ {fw} }}")
+    print()
 
 
 def print_conflicts(conflicts):
@@ -230,7 +239,7 @@ def left_factor(rule_name, sequences):
     prime_counter = [0]
     def next_prime():
         prime_counter[0] += 1
-        return f"{rule_name}'" if prime_counter[0] == 1 else f"{rule_name}{'_' * prime_counter[0]}"
+        return rule_name + ("'" * prime_counter[0])
     for key, seqs in groups.items():
         if len(seqs) == 1:
             single.append(_seq_to_str(seqs[0].symbols))

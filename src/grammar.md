@@ -1,12 +1,12 @@
 Spec          -> Axioma Newlines RuleList TokenSection
 
-Axioma        -> START COLON NONTERM
+Axioma        -> START COLON NON_TERMINAL
 
 RuleList      -> Rule RuleList
                | ε
 
-Rule          -> NONTERM ARROW AltList Newlines
-               | NONTERM ARROW AltList
+Rule          -> NON_TERMINAL ARROW AltList Newlines
+               | NON_TERMINAL ARROW AltList
 
 AltList       -> Body AltListR
 AltListR      -> PIPE Body AltListR
@@ -18,14 +18,14 @@ Body          -> Symbol SymbolList
 SymbolList    -> Symbol SymbolList
                | ε
 
-Symbol        -> NONTERM
-               | TERMINAL_NAME
+Symbol        -> NON_TERMINAL
+               | TERMINAL
 
 TokenSection  -> TokenDecl TokenSection
                | ε
 
-TokenDecl     -> TERMINAL_NAME EQUALS REGEX Newlines
-               | TERMINAL_NAME EQUALS REGEX
+TokenDecl     -> TERMINAL EQUALS REGEX Newlines
+               | TERMINAL EQUALS REGEX
 
 Newlines      -> NEWLINE
                | NEWLINE Newlines
@@ -35,10 +35,9 @@ Newlines      -> NEWLINE
 #
 # START          →  'start' (palavra reservada)
 # EPSILON        →  'epsilon' | 'ε' (palavra reservada)
-# NONTERM        →  [A-Z][a-zA-Z0-9_]*'*  (letra maiúscula isolada ou PascalCase)
-#                   Nota: uma letra maiúscula isolada (S, A, B) é NONTERM.
-# TERMINAL_NAME  →  [A-Z][A-Z0-9_]+  (tudo maiúsculas, 2+ caracteres)
-# STRING         →  '[^']*' | "[^"]*"
+# NON_TERMINAL   →  [A-Z][a-zA-Z0-9_]*'*  (letra maiúscula isolada ou PascalCase)
+#                   Nota: uma letra maiúscula isolada (S, A, B) é NON_TERMINAL.
+# TERMINAL  →  [A-Z][A-Z0-9_]+  (tudo maiúsculas, 2+ caracteres)
 # REGEX          →  /[^/]+/
 # ARROW          →  '->' | '→'
 # PIPE           →  '|'
@@ -54,8 +53,8 @@ Newlines      -> NEWLINE
 # classificado por ordem:
 #   1. 'start'                         → START
 #   2. 'epsilon'                       → EPSILON
-#   3. [A-Z][A-Z0-9_]* com len >= 2   → TERMINAL_NAME
-#   4. Tudo o resto (incluindo letra maiúscula isolada) → NONTERM
+#   3. [A-Z][A-Z0-9_]* com len >= 2   → TERMINAL
+#   4. Tudo o resto (incluindo letra maiúscula isolada) → NON_TERMINAL
 #
 # ===== EXEMPLO DE INPUT VÁLIDO =====
 #

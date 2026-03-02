@@ -1,13 +1,9 @@
-# ---------------------------------------------------------------------------
-# Nós folha (tokens)
-# ---------------------------------------------------------------------------
-
 class IdentifierNode:
     """Nome de um não-terminal (PascalCase, pode ter ' no fim)."""
     def __init__(self, value):
         self.value = value
     def __repr__(self):
-        return f'NONTERM: "{self.value}"'
+        return f'NON_TERMINAL: "{self.value}"'
     def __eq__(self, other):
         return isinstance(other, IdentifierNode) and self.value == other.value
     def print_tree(self, prefix="", is_last=True):
@@ -20,22 +16,9 @@ class TerminalNameNode:
     def __init__(self, value):
         self.value = value
     def __repr__(self):
-        return f'TERMINAL_NAME: "{self.value}"'
+        return f'TERMINAL: {self.value}'
     def __eq__(self, other):
         return isinstance(other, TerminalNameNode) and self.value == other.value
-    def print_tree(self, prefix="", is_last=True):
-        c = "└── " if is_last else "├── "
-        print(prefix + c + repr(self))
-
-
-class StringNode:
-    """Terminal inline entre aspas simples, ex: '+', ':='."""
-    def __init__(self, value):
-        self.value = value
-    def __repr__(self):
-        return f"STRING: {self.value}"
-    def __eq__(self, other):
-        return isinstance(other, StringNode) and self.value == other.value
     def print_tree(self, prefix="", is_last=True):
         c = "└── " if is_last else "├── "
         print(prefix + c + repr(self))
@@ -65,12 +48,9 @@ class EpsilonNode:
         print(prefix + c + repr(self))
 
 
-# ---------------------------------------------------------------------------
-# Nós intermédios — secção Grammar
-# ---------------------------------------------------------------------------
 
 class SymbolNode:
-    """Symbol → NonTerm | TERMINAL_NAME | 'quoted' | epsilon"""
+    """Symbol → NON_TERMINAL | TERMINAL | 'quoted' | epsilon"""
 
     def __init__(self, child):
         self.child = child
@@ -153,7 +133,7 @@ class AltListNode:
 
 
 class RuleNode:
-    """Rule → NonTerm -> AltList"""
+    """Rule → NON_TERMINAL -> AltList"""
 
     def __init__(self, head, altlist):
         self.head    = head       # IdentifierNode
@@ -202,12 +182,9 @@ class RuleListNode:
             rule.print_tree(prefix + ext, is_last=(i == len(self.rules) - 1))
 
 
-# ---------------------------------------------------------------------------
-# Nós intermédios — secção TokenSection (opcional)
-# ---------------------------------------------------------------------------
 
 class TokenDeclNode:
-    """TokenDecl → TERMINAL_NAME = /regex/"""
+    """TokenDecl → TERMINAL = /regex/"""
 
     def __init__(self, name, regex):
         self.name  = name   # TerminalNameNode
@@ -255,7 +232,7 @@ class TokenSectionNode:
 # ---------------------------------------------------------------------------
 
 class AxiomaNode:
-    """Axioma → 'start' ':' NonTerm"""
+    """Axioma → 'start' ':' NON_TERMINAL"""
 
     def __init__(self, nonterm):
         self.nonterm = nonterm  # IdentifierNode
@@ -275,15 +252,12 @@ class AxiomaNode:
         self.nonterm.print_tree(prefix + ext, is_last=True)
 
 
-# ---------------------------------------------------------------------------
-# Nó raiz
-# ---------------------------------------------------------------------------
 
 class SpecNode:
     """
     Spec → Axioma RuleList TokenSection
 
-    Raiz da ASA. O axioma é declarado explicitamente com 'start: NonTerm'.
+    Raiz da ASA. O axioma é declarado explicitamente com 'start: NON_TERMINAL'.
     TokenSection pode estar vazia.
     """
 
@@ -310,7 +284,7 @@ class SpecNode:
             self.tokensection.print_tree(prefix="", is_last=True)
 
     def get_start(self):
-        """O axioma é declarado explicitamente via 'start: NonTerm'."""
+        """O axioma é declarado explicitamente via 'start: NON_TERMINAL'."""
         return self.axioma.nonterm.value
 
     def get_rules(self):
@@ -333,7 +307,7 @@ class SpecNode:
     def get_terminals(self):
         """
         Terminais = nomes declarados na TokenSection
-                  + TERMINAL_NAME usados nos corpos das produções
+                  + TERMINAL usados nos corpos das produções
                     (inclui strings inline como '(' que são TerminalNameNode).
         """
         declared = {d.name.value for d in self.tokensection.decls}
@@ -346,7 +320,7 @@ class SpecNode:
         return declared | used
 
     def get_token_patterns(self):
-        """Dicionário TERMINAL_NAME → padrão regex (só os declarados)."""
+        """Dicionário TERMINAL → padrão regex (só os declarados)."""
         return {d.name.value: d.regex.value for d in self.tokensection.decls}
 
     def validate(self):

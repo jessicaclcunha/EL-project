@@ -6,9 +6,9 @@ _tabversion = '3.10'
 
 _lr_method = 'LALR'
 
-_lr_signature = 'specARROW COLON EPSILON EQUALS NEWLINE NONTERM PIPE REGEX START STRING TERMINAL_NAMEspec : axioma newlines rulelist tokensectionaxioma : START COLON NONTERMrulelist : rule rulelistrulelist : rule : NONTERM ARROW altlist newlinesrule : NONTERM ARROW altlistaltlist : body altlist_restaltlist_rest : PIPE body altlist_restaltlist_rest : body : symbol symbollistbody : EPSILONsymbollist : symbol symbollistsymbollist : symbol : NONTERMsymbol : STRINGsymbol : TERMINAL_NAMEtokensection : tokendecl tokensectiontokensection : tokendecl : TERMINAL_NAME EQUALS REGEX newlinestokendecl : TERMINAL_NAME EQUALS REGEXnewlines : NEWLINE\n               | NEWLINE newlines'
+_lr_signature = 'specARROW COLON EPSILON EQUALS NEWLINE NON_TERMINAL PIPE REGEX START TERMINALspec : axioma newlines rulelist tokensectionaxioma : START COLON NON_TERMINALrulelist : rule rulelistrulelist : rule : NON_TERMINAL ARROW altlist newlinesrule : NON_TERMINAL ARROW altlistaltlist : body altlist_restaltlist_rest : PIPE body altlist_restaltlist_rest : body : symbol symbollistbody : EPSILONsymbollist : symbol symbollistsymbollist : symbol : NON_TERMINALsymbol : TERMINALtokensection : tokendecl tokensectiontokensection : tokendecl : TERMINAL EQUALS REGEX newlinestokendecl : TERMINAL EQUALS REGEXnewlines : NEWLINE\n               | NEWLINE newlines'
     
-_lr_action_items = {'START':([0,],[3,]),'$end':([1,4,5,7,8,10,12,13,15,17,19,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,],[0,-4,-21,-18,-4,-22,-1,-18,-3,-17,-14,-6,-9,-13,-11,-15,-16,-20,-5,-7,-13,-10,-19,-9,-12,-8,]),'NEWLINE':([2,5,11,19,20,21,22,23,24,25,26,28,30,31,33,34,35,],[5,5,-2,-14,5,-9,-13,-11,-15,-16,5,-7,-13,-10,-9,-12,-8,]),'COLON':([3,],[6,]),'TERMINAL_NAME':([4,5,7,8,10,13,15,16,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,],[-4,-21,14,-4,-22,14,-3,25,-14,-6,-9,25,-11,-15,-16,-20,-5,-7,25,25,-10,-19,-9,-12,-8,]),'NONTERM':([4,5,6,8,10,16,19,20,21,22,23,24,25,27,28,29,30,31,33,34,35,],[9,-21,11,9,-22,19,-14,-6,-9,19,-11,-15,-16,-5,-7,19,19,-10,-9,-12,-8,]),'ARROW':([9,],[16,]),'EQUALS':([14,],[18,]),'EPSILON':([16,29,],[23,23,]),'STRING':([16,19,22,24,25,29,30,],[24,-14,24,-15,-16,24,24,]),'REGEX':([18,],[26,]),'PIPE':([19,21,22,23,24,25,30,31,33,34,],[-14,29,-13,-11,-15,-16,-13,-10,29,-12,]),}
+_lr_action_items = {'START':([0,],[3,]),'$end':([1,4,5,7,8,10,12,13,15,17,19,20,21,22,23,24,25,26,27,29,30,31,32,33,34,],[0,-4,-20,-17,-4,-21,-1,-17,-3,-16,-14,-6,-9,-13,-11,-15,-19,-5,-7,-13,-10,-18,-9,-12,-8,]),'NEWLINE':([2,5,11,19,20,21,22,23,24,25,27,29,30,32,33,34,],[5,5,-2,-14,5,-9,-13,-11,-15,5,-7,-13,-10,-9,-12,-8,]),'COLON':([3,],[6,]),'TERMINAL':([4,5,7,8,10,13,15,16,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,],[-4,-20,14,-4,-21,14,-3,24,-14,-6,-9,24,-11,-15,-19,-5,-7,24,24,-10,-18,-9,-12,-8,]),'NON_TERMINAL':([4,5,6,8,10,16,19,20,21,22,23,24,26,27,28,29,30,32,33,34,],[9,-20,11,9,-21,19,-14,-6,-9,19,-11,-15,-5,-7,19,19,-10,-9,-12,-8,]),'ARROW':([9,],[16,]),'EQUALS':([14,],[18,]),'EPSILON':([16,28,],[23,23,]),'REGEX':([18,],[25,]),'PIPE':([19,21,22,23,24,29,30,32,33,],[-14,28,-13,-11,-15,-13,-10,28,-12,]),}
 
 _lr_action = {}
 for _k, _v in _lr_action_items.items():
@@ -17,7 +17,7 @@ for _k, _v in _lr_action_items.items():
       _lr_action[_x][_k] = _y
 del _lr_action_items
 
-_lr_goto_items = {'spec':([0,],[1,]),'axioma':([0,],[2,]),'newlines':([2,5,20,26,],[4,10,27,32,]),'rulelist':([4,8,],[7,15,]),'rule':([4,8,],[8,8,]),'tokensection':([7,13,],[12,17,]),'tokendecl':([7,13,],[13,13,]),'altlist':([16,],[20,]),'body':([16,29,],[21,33,]),'symbol':([16,22,29,30,],[22,30,22,30,]),'altlist_rest':([21,33,],[28,35,]),'symbollist':([22,30,],[31,34,]),}
+_lr_goto_items = {'spec':([0,],[1,]),'axioma':([0,],[2,]),'newlines':([2,5,20,25,],[4,10,26,31,]),'rulelist':([4,8,],[7,15,]),'rule':([4,8,],[8,8,]),'tokensection':([7,13,],[12,17,]),'tokendecl':([7,13,],[13,13,]),'altlist':([16,],[20,]),'body':([16,28,],[21,32,]),'symbol':([16,22,28,29,],[22,29,22,29,]),'altlist_rest':([21,32,],[27,34,]),'symbollist':([22,29,],[30,33,]),}
 
 _lr_goto = {}
 for _k, _v in _lr_goto_items.items():
@@ -27,26 +27,25 @@ for _k, _v in _lr_goto_items.items():
 del _lr_goto_items
 _lr_productions = [
   ("S' -> spec","S'",1,None,None,None),
-  ('spec -> axioma newlines rulelist tokensection','spec',4,'p_spec','gp_parser.py',60),
-  ('axioma -> START COLON NONTERM','axioma',3,'p_axioma','gp_parser.py',73),
-  ('rulelist -> rule rulelist','rulelist',2,'p_rulelist_nonempty','gp_parser.py',82),
-  ('rulelist -> <empty>','rulelist',0,'p_rulelist_empty','gp_parser.py',87),
-  ('rule -> NONTERM ARROW altlist newlines','rule',4,'p_rule_with_newline','gp_parser.py',96),
-  ('rule -> NONTERM ARROW altlist','rule',3,'p_rule_without_newline','gp_parser.py',101),
-  ('altlist -> body altlist_rest','altlist',2,'p_altlist','gp_parser.py',111),
-  ('altlist_rest -> PIPE body altlist_rest','altlist_rest',3,'p_altlist_rest_nonempty','gp_parser.py',116),
-  ('altlist_rest -> <empty>','altlist_rest',0,'p_altlist_rest_empty','gp_parser.py',121),
-  ('body -> symbol symbollist','body',2,'p_body_symbols','gp_parser.py',130),
-  ('body -> EPSILON','body',1,'p_body_epsilon','gp_parser.py',135),
-  ('symbollist -> symbol symbollist','symbollist',2,'p_symbollist_nonempty','gp_parser.py',144),
-  ('symbollist -> <empty>','symbollist',0,'p_symbollist_empty','gp_parser.py',149),
-  ('symbol -> NONTERM','symbol',1,'p_symbol_nonterm','gp_parser.py',158),
-  ('symbol -> STRING','symbol',1,'p_symbol_quoted','gp_parser.py',163),
-  ('symbol -> TERMINAL_NAME','symbol',1,'p_symbol_terminal_name','gp_parser.py',168),
-  ('tokensection -> tokendecl tokensection','tokensection',2,'p_tokensection_nonempty','gp_parser.py',177),
-  ('tokensection -> <empty>','tokensection',0,'p_tokensection_empty','gp_parser.py',182),
-  ('tokendecl -> TERMINAL_NAME EQUALS REGEX newlines','tokendecl',4,'p_tokendecl_with_newline','gp_parser.py',187),
-  ('tokendecl -> TERMINAL_NAME EQUALS REGEX','tokendecl',3,'p_tokendecl_without_newline','gp_parser.py',192),
-  ('newlines -> NEWLINE','newlines',1,'p_newlines','gp_parser.py',202),
-  ('newlines -> NEWLINE newlines','newlines',2,'p_newlines','gp_parser.py',203),
+  ('spec -> axioma newlines rulelist tokensection','spec',4,'p_spec','gp_parser.py',15),
+  ('axioma -> START COLON NON_TERMINAL','axioma',3,'p_axioma','gp_parser.py',25),
+  ('rulelist -> rule rulelist','rulelist',2,'p_rulelist_nonempty','gp_parser.py',31),
+  ('rulelist -> <empty>','rulelist',0,'p_rulelist_empty','gp_parser.py',36),
+  ('rule -> NON_TERMINAL ARROW altlist newlines','rule',4,'p_rule_with_newline','gp_parser.py',42),
+  ('rule -> NON_TERMINAL ARROW altlist','rule',3,'p_rule_without_newline','gp_parser.py',47),
+  ('altlist -> body altlist_rest','altlist',2,'p_altlist','gp_parser.py',54),
+  ('altlist_rest -> PIPE body altlist_rest','altlist_rest',3,'p_altlist_rest_nonempty','gp_parser.py',59),
+  ('altlist_rest -> <empty>','altlist_rest',0,'p_altlist_rest_empty','gp_parser.py',64),
+  ('body -> symbol symbollist','body',2,'p_body_symbols','gp_parser.py',70),
+  ('body -> EPSILON','body',1,'p_body_epsilon','gp_parser.py',75),
+  ('symbollist -> symbol symbollist','symbollist',2,'p_symbollist_nonempty','gp_parser.py',81),
+  ('symbollist -> <empty>','symbollist',0,'p_symbollist_empty','gp_parser.py',86),
+  ('symbol -> NON_TERMINAL','symbol',1,'p_symbol_nonterm','gp_parser.py',92),
+  ('symbol -> TERMINAL','symbol',1,'p_symbol_terminal','gp_parser.py',97),
+  ('tokensection -> tokendecl tokensection','tokensection',2,'p_tokensection_nonempty','gp_parser.py',103),
+  ('tokensection -> <empty>','tokensection',0,'p_tokensection_empty','gp_parser.py',108),
+  ('tokendecl -> TERMINAL EQUALS REGEX newlines','tokendecl',4,'p_tokendecl_with_newline','gp_parser.py',113),
+  ('tokendecl -> TERMINAL EQUALS REGEX','tokendecl',3,'p_tokendecl_without_newline','gp_parser.py',118),
+  ('newlines -> NEWLINE','newlines',1,'p_newlines','gp_parser.py',125),
+  ('newlines -> NEWLINE newlines','newlines',2,'p_newlines','gp_parser.py',126),
 ]

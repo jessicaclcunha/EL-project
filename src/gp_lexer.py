@@ -1,36 +1,10 @@
-"""
-Léxico da linguagem de especificação de gramáticas (Grammar Playground)
-
-Tokens reconhecidos:
-    START          →  'start'  (keyword reservada)
-    TERMINAL_NAME  →  [A-Z][A-Z0-9_]*  (2+ chars, ex: ID, NUMBER, PLUS)
-    NONTERM        →  PascalCase ou maiúscula isolada (ex: Program, S, Expr)
-    STRING         →  '...' ou "..."  terminal inline
-    REGEX          →  /[^/]+/
-    ARROW          →  -> ou →
-    PIPE           →  |
-    EQUALS         →  =
-    COLON          →  :
-    EPSILON        →  epsilon ou ε  (keyword reservada)
-    NEWLINE        →  uma ou mais quebras de linha (significativas para o parser)
-
-Ignorados:
-    espaços, tabs, comentários (# até fim da linha)
-
-Convenções de nomes:
-    - Não-terminais: PascalCase ou letra maiúscula isolada (Program, S, A)
-    - Terminais nomeados: TUDO_MAIUSCULAS com 2+ chars (ID, NUMBER, PLUS)
-    - 'start' e 'epsilon' são palavras reservadas
-"""
-
 import ply.lex as lex
 import re
 
 tokens = (
     'START',
-    'TERMINAL_NAME',
-    'NONTERM',
-    'STRING',
+    'TERMINAL',
+    'NON_TERMINAL',
     'REGEX',
     'ARROW',
     'PIPE',
@@ -69,8 +43,9 @@ def t_REGEX(t):
     return t
 
 
-def t_STRING(t):
+def t_TERMINAL_STRING(t):
     r"""'[^']*'|"[^"]*\""""
+    t.type = 'TERMINAL'
     return t
 
 
@@ -91,17 +66,17 @@ def t_IDENTIFIER(t):
         t.type = 'START'
     elif base == 'epsilon':
         t.type = 'EPSILON'
-    # Classificação TERMINAL_NAME vs NONTERM
+    # Classificação TERMINAL vs NON_TERMINAL
     elif re.fullmatch(r'[A-Z][A-Z0-9_]*', base):
         if len(base) == 1:
-            # Letra maiúscula isolada → NONTERM (convencional: S, A, B)
-            t.type = 'NONTERM'
+            # Letra maiúscula isolada → NON_TERMINAL (convencional: S, A, B)
+            t.type = 'NON_TERMINAL'
         else:
-            # Tudo maiúsculas com 2+ chars → TERMINAL_NAME (ID, NUMBER, PLUS)
-            t.type = 'TERMINAL_NAME'
+            # Tudo maiúsculas com 2+ chars → TERMINAL (ID, NUMBER, PLUS)
+            t.type = 'TERMINAL'
     else:
-        # PascalCase, camelCase, etc. → NONTERM
-        t.type = 'NONTERM'
+        # PascalCase, camelCase, etc. → NON_TERMINAL
+        t.type = 'NON_TERMINAL'
 
     return t
 

@@ -18,13 +18,7 @@ Uso:
 
 import sys
 from gp_parser import parse_grammar, get_parse_errors, get_parse_warnings
-from gp_analysis import (
-    compute_first, compute_follow,
-    print_first_follow, print_lookahead,
-    check_ll1, print_conflicts,
-    suggest_fixes, print_suggestions,
-    build_parse_table, print_parse_table,
-)
+from gp_analysis import *
 from gp_gen_rd import generate_rd_parser
 
 
@@ -61,9 +55,7 @@ def sep(title):
 
 
 def run_pipeline(source, test_phrases=None):
-    # -----------------------------------------------------------------
-    # FASE 1 — Análise léxica, sintática e validação semântica
-    # -----------------------------------------------------------------
+
     sep("FASE 1 — Análise léxica, sintática e semântica (ASA)")
 
     grammar = parse_grammar(source)
@@ -89,25 +81,15 @@ def run_pipeline(source, test_phrases=None):
     print(f"Terminais       : [{', '.join(sorted(grammar.get_terminals()))}]")
     print(f"Padrões léxicos : {grammar.get_token_patterns()}")
 
-    # -----------------------------------------------------------------
-    # FASE 2 — Conjuntos FIRST e FOLLOW
-    # -----------------------------------------------------------------
-    sep("FASE 2 — Conjuntos FIRST e FOLLOW")
+
+    sep("FASE 2 — Conjuntos FIRST, FOLLOW e Lookahead")
 
     first = compute_first(grammar)
     follow = compute_follow(grammar, first)
     print_first_follow(first, follow)
-
-    # -----------------------------------------------------------------
-    # FASE 2b — Conjuntos Lookahead por produção
-    # -----------------------------------------------------------------
-    sep("FASE 2b — Lookahead por produção")
-
     print_lookahead(grammar, first, follow)
 
-    # -----------------------------------------------------------------
-    # FASE 3 — Verificação LL(1)
-    # -----------------------------------------------------------------
+
     sep("FASE 3 — Verificação LL(1)")
 
     conflicts = check_ll1(grammar, first, follow)
@@ -116,9 +98,7 @@ def run_pipeline(source, test_phrases=None):
     suggestions = suggest_fixes(grammar, conflicts)
     print_suggestions(suggestions)
 
-    # -----------------------------------------------------------------
-    # FASE 4 — Tabela de parsing LL(1)
-    # -----------------------------------------------------------------
+
     sep("FASE 4 — Tabela de parsing LL(1)")
 
     table = build_parse_table(grammar, first, follow)
@@ -127,9 +107,7 @@ def run_pipeline(source, test_phrases=None):
     if conflicts:
         print("\n⚠  A tabela pode conter células com múltiplas entradas (conflitos).")
 
-    # -----------------------------------------------------------------
-    # FASE 5 — Geração do parser recursivo descendente
-    # -----------------------------------------------------------------
+
     sep("FASE 5 — Geração do parser recursivo descendente")
 
     if conflicts:
