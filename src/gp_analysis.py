@@ -165,6 +165,27 @@ def print_conflicts(conflicts):
         print()
 
 
+def print_lookahead(grammar, first, follow):
+    """Mostra o lookahead calculado para cada alternativa de cada NT."""
+    nts = grammar.get_nonterminals()
+    print(f"{'NT':<15} {'Produção':<35} {'Lookahead'}")
+    print("─" * 78)
+    for rule in grammar.get_rules():
+        A = rule.get_head_name()
+        for seq in rule.altlist.sequences:
+            sf = first_of_seq(seq.symbols, first, nts)
+            prod_str = f"{A} → {repr(seq)}"
+
+            # Lookahead efetivo: FIRST da alternativa (sem ε), mais FOLLOW se anulável
+            lookahead = sf - {'ε'}
+            if 'ε' in sf:
+                lookahead |= follow[A]
+
+            la_str = ', '.join(sorted(lookahead))
+            nullable_mark = '  (anulável → usa FOLLOW)' if 'ε' in sf else ''
+            print(f"{A:<15} {prod_str:<35} {{ {la_str} }}{nullable_mark}")
+
+
 def print_parse_table(table, grammar):
     nts   = sorted(grammar.get_nonterminals())
     terms = sorted(grammar.get_terminals() | {'$'})

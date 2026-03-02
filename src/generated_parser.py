@@ -140,7 +140,7 @@ class Parser:
         """Produção: Program -> StmtList"""
         tok = self.current()
         if tok.type == 'ID':
-            # Program -> StmtList
+            # Program -> StmtList  [lookahead: {ID}]
             children = []
             children.append(self.parse_StmtList())
             return TreeNode('Program', children=children)
@@ -154,7 +154,7 @@ class Parser:
         """Produção: StmtList -> Stmt StmtListR"""
         tok = self.current()
         if tok.type == 'ID':
-            # StmtList -> Stmt StmtListR
+            # StmtList -> Stmt StmtListR  [lookahead: {ID}]
             children = []
             children.append(self.parse_Stmt())
             children.append(self.parse_StmtListR())
@@ -169,21 +169,21 @@ class Parser:
         """Produção: StmtListR -> SEMI Stmt StmtListR | ε"""
         tok = self.current()
         if tok.type == 'SEMI':
-            # StmtListR -> SEMI Stmt StmtListR
+            # StmtListR -> SEMI Stmt StmtListR  [lookahead: {SEMI}]
             children = []
             children.append(self.match('SEMI'))
             children.append(self.parse_Stmt())
             children.append(self.parse_StmtListR())
             return TreeNode('StmtListR', children=children)
         else:
-            # StmtListR -> ε (token atual deve estar no FOLLOW)
+            # StmtListR -> ε  [lookahead ∉ FIRST → FOLLOW(StmtListR): {$}]
             return TreeNode('StmtListR', children=[TreeNode("ε")])
 
     def parse_Stmt(self):
         """Produção: Stmt -> ID ASSIGN Expr"""
         tok = self.current()
         if tok.type == 'ID':
-            # Stmt -> ID ASSIGN Expr
+            # Stmt -> ID ASSIGN Expr  [lookahead: {ID}]
             children = []
             children.append(self.match('ID'))
             children.append(self.match('ASSIGN'))
@@ -199,7 +199,7 @@ class Parser:
         """Produção: Expr -> Term ExprR"""
         tok = self.current()
         if tok.type == 'ID' or tok.type == 'NUMBER':
-            # Expr -> Term ExprR
+            # Expr -> Term ExprR  [lookahead: {ID, NUMBER}]
             children = []
             children.append(self.parse_Term())
             children.append(self.parse_ExprR())
@@ -214,26 +214,26 @@ class Parser:
         """Produção: ExprR -> PLUS Term ExprR | ε"""
         tok = self.current()
         if tok.type == 'PLUS':
-            # ExprR -> PLUS Term ExprR
+            # ExprR -> PLUS Term ExprR  [lookahead: {PLUS}]
             children = []
             children.append(self.match('PLUS'))
             children.append(self.parse_Term())
             children.append(self.parse_ExprR())
             return TreeNode('ExprR', children=children)
         else:
-            # ExprR -> ε (token atual deve estar no FOLLOW)
+            # ExprR -> ε  [lookahead ∉ FIRST → FOLLOW(ExprR): {$, SEMI}]
             return TreeNode('ExprR', children=[TreeNode("ε")])
 
     def parse_Term(self):
         """Produção: Term -> ID | NUMBER"""
         tok = self.current()
         if tok.type == 'ID':
-            # Term -> ID
+            # Term -> ID  [lookahead: {ID}]
             children = []
             children.append(self.match('ID'))
             return TreeNode('Term', children=children)
         elif tok.type == 'NUMBER':
-            # Term -> NUMBER
+            # Term -> NUMBER  [lookahead: {NUMBER}]
             children = []
             children.append(self.match('NUMBER'))
             return TreeNode('Term', children=children)

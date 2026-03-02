@@ -250,22 +250,23 @@ def generate_rd_parser(grammar, first, follow):
             first_branch = False
 
             w(f'        {keyword} {cond_str}:')
-            w(f'            # {nt} -> {repr(seq)}')
+            lookahead_str = ', '.join(sorted(sf - {'ε'}))
+            w(f'            # {nt} -> {repr(seq)}  [lookahead: {{{lookahead_str}}}]')
             _gen_seq_code(w, seq, nt, nts)
 
         # Alternativa epsilon / anulável — usar FOLLOW
         if epsilon_idx is not None:
             seq = seqs[epsilon_idx]
             follow_terms = follow.get(nt, set())
+            follow_str = ', '.join(sorted(follow_terms))
 
             if first_branch:
                 # Só existe a alternativa epsilon
-                w(f'        # {nt} -> ε')
+                w(f'        # {nt} -> ε  [FOLLOW({nt}): {{{follow_str}}}]')
                 w(f'        return TreeNode({nt!r}, children=[TreeNode("ε")])')
             else:
-                # else: pode ser epsilon se o token está no FOLLOW
                 w(f'        else:')
-                w(f'            # {nt} -> ε (token atual deve estar no FOLLOW)')
+                w(f'            # {nt} -> ε  [lookahead ∉ FIRST → FOLLOW({nt}): {{{follow_str}}}]')
                 w(f'            return TreeNode({nt!r}, children=[TreeNode("ε")])')
         else:
             # Sem alternativa epsilon — erro se nenhum branch foi tomado

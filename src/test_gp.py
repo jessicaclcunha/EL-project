@@ -326,7 +326,7 @@ class TestAST(unittest.TestCase):
         self.assertTrue(sym_eps.get_is_epsilon())
         self.assertEqual(sym_eps.get_value(), 'ε')
 
-        sym_str = SymbolNode(StringNode("'+'"))
+        sym_str = SymbolNode(TerminalNameNode("'+'"))
         self.assertTrue(sym_str.get_is_terminal())
 
 

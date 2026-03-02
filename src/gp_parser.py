@@ -17,7 +17,7 @@ Gramática implementada (ver grammar.md para a especificação completa):
     Body          -> Symbol SymbolList | EPSILON
     SymbolList    -> Symbol SymbolList | ε
 
-    Symbol        -> NONTERM | TERMINAL_NAME | STRING
+    Symbol        -> NONTERM | TERMINAL_NAME
 
     TokenSection  -> TokenDecl TokenSection | ε
     TokenDecl     -> TERMINAL_NAME EQUALS REGEX Newlines
@@ -151,7 +151,8 @@ def p_symbollist_empty(p):
 
 
 # ---------------------------------------------------------------------------
-# Symbol — NONTERM | TERMINAL_NAME | STRING
+# Symbol — NONTERM | TERMINAL_NAME
+# (STRING do lexer é convertido para TerminalNameNode na AST)
 # ---------------------------------------------------------------------------
 
 def p_symbol_nonterm(p):
@@ -161,7 +162,8 @@ def p_symbol_nonterm(p):
 
 def p_symbol_quoted(p):
     """symbol : STRING"""
-    p[0] = SymbolNode(StringNode(p[1]))
+    # Strings inline ('(', '+', etc.) são terminais — entram como TerminalNameNode
+    p[0] = SymbolNode(TerminalNameNode(p[1]))
 
 
 def p_symbol_terminal_name(p):

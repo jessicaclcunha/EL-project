@@ -93,7 +93,7 @@ class SymbolNode:
         return self.child.value
 
     def get_is_terminal(self):
-        return isinstance(self.child, (TerminalNameNode, StringNode))
+        return isinstance(self.child, TerminalNameNode)
 
     def get_is_epsilon(self):
         return isinstance(self.child, EpsilonNode)
@@ -333,19 +333,17 @@ class SpecNode:
     def get_terminals(self):
         """
         Terminais = nomes declarados na TokenSection
-                  + quoted strings usadas inline nas produções
-                  + TERMINAL_NAME usados nos corpos das produções.
+                  + TERMINAL_NAME usados nos corpos das produções
+                    (inclui strings inline como '(' que são TerminalNameNode).
         """
         declared = {d.name.value for d in self.tokensection.decls}
-        inline = set()
+        used = set()
         for rule in self.rulelist.rules:
             for seq in rule.altlist.sequences:
                 for sym in seq.symbols:
-                    if isinstance(sym.child, StringNode):
-                        inline.add(sym.get_value())
-                    elif isinstance(sym.child, TerminalNameNode):
-                        inline.add(sym.get_value())
-        return declared | inline
+                    if isinstance(sym.child, TerminalNameNode):
+                        used.add(sym.get_value())
+        return declared | used
 
     def get_token_patterns(self):
         """Dicionário TERMINAL_NAME → padrão regex (só os declarados)."""
@@ -389,12 +387,15 @@ class SpecNode:
             )
 
         # 3. Terminais nomeados usados nas regras estão na TokenSection?
+        #    Strings inline ('(', '+') não precisam de declaração.
         used_terminal_names = set()
         for rule in self.rulelist.rules:
             for seq in rule.altlist.sequences:
                 for sym in seq.symbols:
                     if isinstance(sym.child, TerminalNameNode):
-                        used_terminal_names.add(sym.get_value())
+                        val = sym.get_value()
+                        if not val.startswith(("'", '"')):
+                            used_terminal_names.add(val)
 
         undeclared = used_terminal_names - declared_tokens
         for t in sorted(undeclared):

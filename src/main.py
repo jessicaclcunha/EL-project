@@ -20,7 +20,7 @@ import sys
 from gp_parser import parse_grammar, get_parse_errors, get_parse_warnings
 from gp_analysis import (
     compute_first, compute_follow,
-    print_first_follow,
+    print_first_follow, print_lookahead,
     check_ll1, print_conflicts,
     suggest_fixes, print_suggestions,
     build_parse_table, print_parse_table,
@@ -97,6 +97,13 @@ def run_pipeline(source, test_phrases=None):
     first = compute_first(grammar)
     follow = compute_follow(grammar, first)
     print_first_follow(first, follow)
+
+    # -----------------------------------------------------------------
+    # FASE 2b — Conjuntos Lookahead por produção
+    # -----------------------------------------------------------------
+    sep("FASE 2b — Lookahead por produção")
+
+    print_lookahead(grammar, first, follow)
 
     # -----------------------------------------------------------------
     # FASE 3 — Verificação LL(1)

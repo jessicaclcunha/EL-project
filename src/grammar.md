@@ -20,7 +20,6 @@ SymbolList    -> Symbol SymbolList
 
 Symbol        -> NONTERM
                | TERMINAL_NAME
-               | STRING
 
 TokenSection  -> TokenDecl TokenSection
                | ε
