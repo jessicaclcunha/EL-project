@@ -22,7 +22,7 @@ from gp_parser import parse_grammar, get_parse_errors
 from gp_ast import (
     SpecNode, AxiomaNode, RuleListNode, RuleNode,
     AltListNode, SeqNode, SymbolNode,
-    IdentifierNode, TerminalNameNode, StringNode, EpsilonNode,
+    IdentifierNode, TerminalNameNode, EpsilonNode,
     TokenSectionNode, TokenDeclNode, RegexNode,
 )
 from gp_analysis import (
@@ -77,17 +77,17 @@ class TestLexer(unittest.TestCase):
     def test_nonterm_pascal(self):
         """PascalCase deve ser NONTERM."""
         toks = tokenize("Program")
-        self.assertEqual(toks, [('NONTERM', 'Program')])
+        self.assertEqual(toks, [('NON_TERMINAL', 'Program')])
 
     def test_nonterm_single_letter(self):
         """Letra maiúscula isolada deve ser NONTERM (convenção de gramáticas)."""
         toks = tokenize("S")
-        self.assertEqual(toks, [('NONTERM', 'S')])
+        self.assertEqual(toks, [('NON_TERMINAL', 'S')])
 
     def test_nonterm_with_prime(self):
         """Não-terminal com ' deve ser NONTERM."""
         toks = tokenize("ExprR")
-        self.assertEqual(toks, [('NONTERM', 'ExprR')])
+        self.assertEqual(toks, [('NON_TERMINAL', 'ExprR')])
 
     def test_terminal(self):
         """TUDO_MAIUSCULAS com 2+ chars deve ser TERMINAL."""
@@ -110,12 +110,12 @@ class TestLexer(unittest.TestCase):
     def test_string_single_quotes(self):
         """String entre aspas simples deve ser STRING."""
         toks = tokenize("';'")
-        self.assertEqual(toks, [('STRING', "';'")])
+        self.assertEqual(toks, [('TERMINAL', "';'")])
 
     def test_string_double_quotes(self):
         """String entre aspas duplas deve ser STRING."""
         toks = tokenize('"hello"')
-        self.assertEqual(toks, [('STRING', '"hello"')])
+        self.assertEqual(toks, [('TERMINAL', '"hello"')])
 
     def test_regex(self):
         """Regex entre / / deve ser REGEX (sem as barras no valor)."""
@@ -155,12 +155,12 @@ class TestLexer(unittest.TestCase):
         """Linha 'start: Program' deve dar START COLON NONTERM."""
         toks = tokenize("start: Program")
         types = [t[0] for t in toks]
-        self.assertEqual(types, ['START', 'COLON', 'NONTERM'])
+        self.assertEqual(types, ['START', 'COLON', 'NON_TERMINAL'])
 
     def test_full_rule_line(self):
         """Linha 'Expr -> Term PLUS Expr' deve dar tokens corretos."""
         toks = tokenize("Expr -> Term PLUS Expr")
-        expected_types = ['NONTERM', 'ARROW', 'NONTERM', 'TERMINAL', 'NONTERM']
+        expected_types = ['NON_TERMINAL', 'ARROW', 'NON_TERMINAL', 'TERMINAL', 'NON_TERMINAL']
         types = [t[0] for t in toks]
         self.assertEqual(types, expected_types)
 
@@ -174,7 +174,7 @@ class TestLexer(unittest.TestCase):
         """'epsilon' dentro de uma regra deve ser EPSILON."""
         toks = tokenize("A -> B | epsilon")
         types = [t[0] for t in toks]
-        self.assertEqual(types, ['NONTERM', 'ARROW', 'NONTERM', 'PIPE', 'EPSILON'])
+        self.assertEqual(types, ['NON_TERMINAL', 'ARROW', 'NON_TERMINAL', 'PIPE', 'EPSILON'])
 
 
 # =====================================================================
