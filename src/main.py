@@ -1,25 +1,9 @@
-"""
-Grammar Playground — Pipeline principal
-
-Demonstra todas as funcionalidades implementadas:
-    1. Análise léxica e sintática → ASA (Árvore Sintática Abstrata)
-    2. Validação semântica (erros e avisos)
-    3. Conjuntos FIRST e FOLLOW
-    4. Verificação LL(1) e deteção de conflitos
-    5. Sugestões de correção (fatorização, eliminação de recursividade)
-    6. Tabela de parsing LL(1)
-    7. Geração de parser recursivo descendente
-    8. Teste do parser gerado com frases de exemplo
-
-Uso:
-    python main.py                    # usa gramática de exemplo embutida
-    python main.py grammar.txt        # lê gramática de um ficheiro
-"""
-
 import sys
 from gp_parser import parse_grammar, get_parse_errors, get_parse_warnings
 from gp_analysis import *
-from gp_gen_rd import generate_rd_parser
+from gp_parser_rd import generate_rd_parser
+from gp_parser_td import TableParser, generate_table_parser
+import os
 
 
 EXAMPLE_GRAMMAR = """\
@@ -108,44 +92,92 @@ def run_pipeline(source, test_phrases=None):
         print("\n⚠  A tabela pode conter células com múltiplas entradas (conflitos).")
 
 
-    sep("FASE 5 — Geração do parser recursivo descendente")
+    sep("FASE 5 — Geração dos parsers")
 
     if conflicts:
-        print("⚠  A gramática tem conflitos — o parser gerado pode não funcionar corretamente.")
-        print("   Aplique as sugestões de correção antes de gerar o parser.")
+        print("⚠  A gramática tem conflitos — os parsers gerados podem não funcionar corretamente.")
+        print("   Aplique as sugestões de correção antes de gerar os parsers.")
     else:
-        code = generate_rd_parser(grammar, first, follow)
+        # ── Parser Recursivo Descendente ─────────────────────────────
+        rd_code = generate_rd_parser(grammar, first, follow)
 
-        output_file = "generated_parser.py"
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(code)
-        print(f"✓ Parser gerado com sucesso → {output_file}")
+        os.makedirs("generated_parsers", exist_ok=True)
+        rd_file = "generated_parsers/rd.py"
+        with open(rd_file, "w", encoding="utf-8") as f:
+            f.write(rd_code)
+        print(f"✓ Parser recursivo descendente gerado → {rd_file}")
+        nts_list = grammar.get_nonterminals()
+        print(f"  Funções parse_*: {len(nts_list)} ({', '.join(sorted(nts_list))})")
 
-        # Contagem de funções geradas
-        nts = grammar.get_nonterminals()
-        print(f"  Funções parse_*: {len(nts)} ({', '.join(sorted(nts))})")
+        # ── Parser Dirigido por Tabela ────────────────────────────────
+        td_code = generate_table_parser(grammar, first, follow)
 
-        # -----------------------------------------------------------------
-        # FASE 6 — Teste do parser gerado com frases
-        # -----------------------------------------------------------------
+        td_file = "generated_parsers/td.py"
+        with open(td_file, "w", encoding="utf-8") as f:
+            f.write(td_code)
+        print(f"✓ Parser dirigido por tabela gerado   → {td_file}")
+
+        # ── Teste do Parser RD ────────────────────────────────────────
         if test_phrases:
-            sep("FASE 6 — Teste do parser gerado")
-
-            # Executar o código gerado
-            ns = {}
-            exec(code, ns)
-
+            sep("FASE 6 — Teste do parser recursivo descendente")
+            ns_rd = {}
+            exec(rd_code, ns_rd)
             for phrase in test_phrases:
                 print(f"\nFrase: {phrase!r}")
                 try:
-                    lex = ns['Lexer'](phrase)
-                    print(f"Tokens: {lex.tokens[:-1]}")  # sem o $ final
-                    parser = ns['Parser'](lex.tokens)
-                    tree = parser.parse()
+                    lex = ns_rd['Lexer'](phrase)
+                    print(f"Tokens: {lex.tokens[:-1]}")
+                    p = ns_rd['Parser'](lex.tokens)
+                    tree = p.parse()
                     print("Árvore de derivação:")
                     tree.print_tree()
                 except SyntaxError as e:
                     print(f"  ✗ Erro: {e}")
+
+        # ── Teste do Parser Dirigido por Tabela ───────────────────────
+        if test_phrases:
+            sep("FASE 7 — Teste do parser dirigido por tabela")
+            ns_td = {}
+            exec(td_code, ns_td)
+            for phrase in test_phrases:
+                print(f"\nFrase: {phrase!r}")
+                try:
+                    lex = ns_td['Lexer'](phrase)
+                    p = ns_td['Parser'](lex.tokens)
+                    tree = p.parse()
+                    print("Passos do parsing (pilha):")
+                    p.print_steps()
+                    print("\nÁrvore de derivação:")
+                    tree.print_tree()
+                except SyntaxError as e:
+                    print(f"  ✗ Erro: {e}")
+
+        # ── Comparação RD vs Tabela ───────────────────────────────────
+        if test_phrases:
+            sep("FASE 8 — Comparação RD vs Tabela")
+            ns_rd2 = {}; exec(rd_code, ns_rd2)
+            ns_td2 = {}; exec(td_code, ns_td2)
+
+            all_ok = True
+            for phrase in test_phrases:
+                try:
+                    # RD
+                    rd_lex = ns_rd2['Lexer'](phrase)
+                    rd_p   = ns_rd2['Parser'](rd_lex.tokens)
+                    rd_p.parse()
+
+                    # Tabela
+                    td_lex = ns_td2['Lexer'](phrase)
+                    td_p   = ns_td2['Parser'](td_lex.tokens)
+                    td_p.parse()
+
+                    print(f"  ✓  {phrase!r}  — ambos aceitam")
+                except SyntaxError as e:
+                    print(f"  ✗  {phrase!r}  — {e}")
+                    all_ok = False
+
+            if all_ok:
+                print("\n✓ Ambos os parsers produzem resultados consistentes.")
 
     print()
 
