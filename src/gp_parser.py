@@ -144,17 +144,6 @@ parser = yacc.yacc(start='spec')
 def _merge_rules(rules):
     """
     Funde regras com o mesmo não-terminal numa única RuleNode.
-
-    Se o utilizador escrever:
-        A -> x | y
-        A -> z
-
-    O parser cria dois RuleNode para A. Esta função funde-os num só:
-        A -> x | y | z
-
-    Isto é essencial para que check_ll1, suggest_fixes e build_parse_table
-    vejam todas as alternativas de um não-terminal de uma só vez.
-    A ordem das regras originais é preservada.
     """
     if not rules:
         return rules

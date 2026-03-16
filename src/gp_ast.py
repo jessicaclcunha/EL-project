@@ -324,21 +324,6 @@ class SpecNode:
         return {d.name.value: d.regex.value for d in self.tokensection.decls}
 
     def validate(self):
-        """
-        Validação semântica da gramática.
-
-        Verifica:
-            1. O símbolo inicial tem regra definida
-            2. Todos os NTs usados nos corpos das produções têm regra
-            3. Terminais nomeados usados nas regras estão declarados na TokenSection
-            4. Não há regras sem alternativas
-            5. Não há declarações de tokens duplicadas
-
-        Devolve:
-            (errors, warnings) — duas listas de strings.
-            errors   = problemas que impedem a análise (gramática inválida)
-            warnings = avisos que não impedem a análise mas podem indicar problemas
-        """
         errors = []
         warnings = []
 
@@ -347,21 +332,17 @@ class SpecNode:
         start = self.get_start()
         declared_tokens = {d.name.value for d in self.tokensection.decls}
 
-        # 1. Símbolo inicial tem regra?
         if start not in defined_nts:
             errors.append(
                 f"O símbolo inicial '{start}' não tem nenhuma regra definida."
             )
 
-        # 2. NTs usados nos corpos têm regra definida?
         undefined_nts = referenced_nts - defined_nts
         for nt in sorted(undefined_nts):
             errors.append(
                 f"O não-terminal '{nt}' é usado nas produções mas não tem regra definida."
             )
 
-        # 3. Terminais nomeados usados nas regras estão na TokenSection?
-        #    Strings inline ('(', '+') não precisam de declaração.
         used_terminal_names = set()
         for rule in self.rulelist.rules:
             for seq in rule.altlist.sequences:
@@ -377,15 +358,12 @@ class SpecNode:
                 f"O terminal '{t}' é usado nas produções mas não tem padrão regex "
                 f"declarado na TokenSection."
             )
-
-        # 4. Regras sem alternativas?
         for rule in self.rulelist.rules:
             if not rule.altlist.sequences:
                 errors.append(
                     f"A regra '{rule.get_head_name()}' não tem alternativas."
                 )
 
-        # 5. Declarações de tokens duplicadas?
         seen_tokens = set()
         for decl in self.tokensection.decls:
             name = decl.name.value
@@ -395,7 +373,6 @@ class SpecNode:
                 )
             seen_tokens.add(name)
 
-        # 6. NTs definidos mas nunca usados (nem como start)?
         unused_nts = defined_nts - referenced_nts - {start}
         for nt in sorted(unused_nts):
             warnings.append(

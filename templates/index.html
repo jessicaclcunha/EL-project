@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grammar Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <style>
+    /* selector de parser (rd / td) */
+    .parser-selector {
+      display: flex;
+      gap: 2px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 3px;
+      margin-bottom: 18px;
+    }
+    .ps-btn {
+      flex: 1;
+      height: 28px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      cursor: pointer;
+      transition: background .12s, color .12s;
+      font-family: var(--mono);
+    }
+    .ps-btn.active {
+      background: var(--panel);
+      color: var(--indigo);
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .parser-pane { display: none; }
+    .parser-pane.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <span class="logo">grammar<span>.</span>playground</span>
+    <span class="pill">LL(1)</span>
+  </div>
+
+  <div class="layout">
+
+    <!-- editor -->
+    <div class="editor">
+      <div class="pane-top">
+        Gramática
+        <button class="btn-outline" id="btn-example"
+                style="height:24px;font-size:11px">exemplo</button>
+      </div>
+      <textarea id="grammar" spellcheck="false"
+        placeholder="start: S&#10;S -> ..."></textarea>
+      <div class="editor-actions">
+        <button class="btn-indigo"  id="btn-analyse">Analisar</button>
+        <button class="btn-outline" id="btn-generate" disabled>Gerar parsers</button>
+      </div>
+    </div>
+
+    <!-- results -->
+    <div class="results">
+
+      <div class="tabs">
+        <div class="tab active" data-tab="ff">FIRST / FOLLOW</div>
+        <div class="tab" data-tab="conflicts">
+          Conflitos
+          <span id="badge" class="badge" style="display:none"></span>
+        </div>
+        <div class="tab" data-tab="table">Tabela LL(1)</div>
+        <div class="tab" data-tab="parsers">Parsers</div>
+        <div class="tab" data-tab="phrase">Testar frase</div>
+      </div>
+
+      <!-- FIRST / FOLLOW + Lookahead-->
+      <div class="panel active" id="panel-ff">
+        <div id="ff-empty" class="empty">
+          <svg width="28" height="28" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4m0 4h.01"/>
+          </svg>
+          <p>Introduz uma gramática e clica em <strong>Analisar</strong>.</p>
+        </div>
+        <div id="ff-result" style="display:none">
+          <div class="banners" id="ff-banners"></div>
+
+          <!-- FIRST e FOLLOW -->
+          <div class="section">
+            <div class="sec-title">FIRST e FOLLOW</div>
+            <table>
+              <thead>
+                <tr><th>NT</th><th>FIRST</th><th>FOLLOW</th></tr>
+              </thead>
+              <tbody id="ff-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Lookahead -->
+          <div class="section">
+            <div class="sec-title">Lookahead por produção</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>NT</th>
+                  <th>Produção</th>
+                  <th>Lookahead</th>
+                  <th>Anulável</th>
+                </tr>
+              </thead>
+              <tbody id="la-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conflitos -->
+      <div class="panel" id="panel-conflicts">
+        <div id="conf-empty" class="empty">
+          <svg width="28" height="28" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          <p>Nenhum conflito detectado.</p>
+        </div>
+        <div id="conf-result" style="display:none">
+          <div class="section">
+            <div class="sec-title">Conflitos LL(1)</div>
+            <div id="conf-list"></div>
+          </div>
+          <div id="sugg-section" style="display:none">
+            <div class="section">
+              <div class="sec-title"
+                   style="display:flex;align-items:center;justify-content:space-between">
+                Sugestões de correção
+                <button class="btn-amber" id="btn-apply"
+                        style="height:26px;font-size:12px">
+                  ✦ Aplicar sugestões
+                </button>
+              </div>
+              <div id="sugg-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela LL(1) -->
+      <div class="panel" id="panel-table">
+        <div id="table-empty" class="empty">
+          <svg width="28" height="28" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M3 9h18M9 21V9"/>
+          </svg>
+          <p>A tabela LL(1) aparece aqui após a análise.</p>
+        </div>
+        <div id="table-result" style="display:none">
+          <div class="section">
+            <div class="sec-title">Tabela de parsing LL(1)</div>
+            <div class="tbl-wrap">
+              <table class="ll" id="ll-table"></table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parsers -->
+      <div class="panel" id="panel-parsers">
+        <div id="parsers-empty" class="empty">
+          <svg width="28" height="28" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <p>Clica em <strong>Gerar parsers</strong> após análise sem conflitos.</p>
+        </div>
+        <div id="parsers-result" style="display:none">
+          <!-- selector rd / td -->
+          <div class="parser-selector">
+            <button class="ps-btn active" data-parser="rd">rd.py — Recursivo Descendente</button>
+            <button class="ps-btn"        data-parser="td">td.py — Top Down</button>
+          </div>
+
+          <div class="parser-pane active" id="pane-rd">
+            <div class="code-header">
+              <span class="sec-title" style="margin:0">Parser Recursivo Descendente</span>
+              <button class="btn-outline" id="btn-dl-rd"
+                      style="height:26px;font-size:12px">↓ descarregar rd.py</button>
+            </div>
+            <pre class="code" id="code-rd"></pre>
+          </div>
+
+          <div class="parser-pane" id="pane-td">
+            <div class="code-header">
+              <span class="sec-title" style="margin:0">Parser Top Down Dirigido por Tabela</span>
+              <button class="btn-outline" id="btn-dl-td"
+                      style="height:26px;font-size:12px">↓ descarregar td.py</button>
+            </div>
+            <pre class="code" id="code-td"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Testar frase -->
+      <div class="panel" id="panel-phrase">
+        <div class="phrase-row">
+          <input type="text" id="phrase-input" placeholder="ex: x := a + 3">
+          <button class="btn-green" id="btn-phrase">Analisar</button>
+        </div>
+        <div class="banners" id="phrase-banners"></div>
+        <div id="phrase-result" style="display:none">
+          <div class="section">
+            <div class="sec-title">Árvore de derivação</div>
+            <div class="tree-svg-wrap" id="tree-svg-wrap"></div>
+          </div>
+          <div class="section">
+            <div class="sec-title">Passos do parsing</div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Pilha</th><th>Input</th><th>Ação</th></tr>
+                </thead>
+                <tbody id="steps-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
