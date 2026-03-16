@@ -31,45 +31,29 @@ Newlines      -> NEWLINE
                | NEWLINE Newlines
 
 
-# ===== DEFINIÇÕES LÉXICAS =====
-#
-# START          →  'start' (palavra reservada)
-# EPSILON        →  'epsilon' | 'ε' (palavra reservada)
-# NON_TERMINAL   →  [A-Z][a-zA-Z0-9_]*'*  (letra maiúscula isolada ou PascalCase)
-#                   Nota: uma letra maiúscula isolada (S, A, B) é NON_TERMINAL.
-# TERMINAL  →  [A-Z][A-Z0-9_]+  (tudo maiúsculas, 2+ caracteres)
-# REGEX          →  /[^/]+/
-# ARROW          →  '->' | '→'
-# PIPE           →  '|'
-# EQUALS         →  '='
-# COLON          →  ':'
-# NEWLINE        →  '\n'+
-#
-# Ignorados: espaços, tabs, comentários (# até fim da linha)
-#
-# ===== PRECEDÊNCIA DE CLASSIFICAÇÃO =====
-#
-# O identificador genérico [A-Za-z][A-Za-z0-9_]*'* é testado e depois
-# classificado por ordem:
-#   1. 'start'                         → START
-#   2. 'epsilon'                       → EPSILON
-#   3. [A-Z][A-Z0-9_]* com len >= 2   → TERMINAL
-#   4. Tudo o resto (incluindo letra maiúscula isolada) → NON_TERMINAL
-#
-# ===== EXEMPLO DE INPUT VÁLIDO =====
-#
-# start: Program
-#
-# Program    -> StmtList
-# StmtList   -> Stmt StmtListR
-# StmtListR  -> SEMI Stmt StmtListR | epsilon
-# Stmt       -> ID ASSIGN Expr
-# Expr       -> Term ExprR
-# ExprR      -> PLUS Term ExprR | epsilon
-# Term       -> ID | NUMBER
-#
-# ID     = /[a-zA-Z_][a-zA-Z0-9_]*/
-# NUMBER = /[0-9]+/
-# PLUS   = /\+/
-# SEMI   = /;/
-# ASSIGN = /:=/
+## Definições léxicas
+
+| Token | Padrão | Exemplos |
+|-------|--------|---------|
+| `START` | palavra reservada | `start` |
+| `EPSILON` | palavra reservada | `epsilon`, `ε` |
+| `NON_TERMINAL` | letra maiúscula + letras/dígitos/underscore | `S`, `Expr`, `StmtList` |
+| `TERMINAL` | 2+ letras maiúsculas/dígitos/underscore | `ID`, `NUMBER`, `PLUS` |
+| `TERMINAL` | string entre aspas simples ou duplas | `'('`, `':='`, `"hello"` |
+| `REGEX` | padrão entre barras | `/[a-z]+/`, `/[0-9]+/` |
+| `ARROW` | seta | `->`, `→` |
+| `PIPE` | barra vertical | `\|` |
+| `EQUALS` | igual | `=` |
+| `COLON` | dois pontos | `:` |
+| `NEWLINE` | newline | `\n` |
+
+Ignorados: espaços, tabs, comentários (`#` até fim da linha).
+
+## Precedência de classificação
+
+Quando o lexer encontra um identificador, classifica-o por esta ordem:
+
+1. `start` → **START**
+2. `epsilon` → **EPSILON**
+3. Tudo maiúsculas com 2+ caracteres → **TERMINAL** (ex: `ID`, `NUMBER`)
+4. Tudo o resto, incluindo letra maiúscula isolada → **NON_TERMINAL** (ex: `S`, `Expr`)

@@ -1,325 +1,188 @@
-"""
-Gerador de parser recursivo descendente.
-
-Dado um SpecNode (gramática parseada) e os conjuntos FIRST/FOLLOW,
-gera código Python de um parser recursivo descendente que:
-  - Tokeniza o input com base nos padrões da TokenSection
-  - Tem uma função parse_<NT>() para cada não-terminal
-  - Usa os conjuntos FIRST para decidir que alternativa seguir
-  - Constrói a árvore de derivação durante o parsing
-
-Uso:
-    from gp_gen_rd import generate_rd_parser
-    code = generate_rd_parser(grammar, first, follow)
-    # code é uma string com o ficheiro Python gerado
-"""
-
 import re
-
-from gp_analysis import compute_first, compute_follow, first_of_seq
+from gp_analysis import first_of_seq
 
 
 def generate_rd_parser(grammar, first, follow):
-    """
-    Gera o código Python de um parser recursivo descendente.
-
-    Parâmetros:
-        grammar : SpecNode  — gramática parseada
-        first   : dict      — conjuntos FIRST (NT → set)
-        follow  : dict      — conjuntos FOLLOW (NT → set)
-
-    Devolve:
-        str — código Python completo do parser gerado
-    """
-    nts = grammar.get_nonterminals()
-    start = grammar.get_start()
-    rules = grammar.get_rules()
+    nts      = grammar.get_nonterminals()
+    start    = grammar.get_start()
+    rules    = grammar.get_rules()
     patterns = grammar.get_token_patterns()
-    terminals = grammar.get_terminals()
+
+    all_terminals = _collect_terminals(rules, patterns)
 
     lines = []
-    w = lines.append  # shortcut para adicionar linhas
+    w = lines.append
 
-    # -----------------------------------------------------------------
     # Cabeçalho
-    # -----------------------------------------------------------------
     w('"""')
     w('Parser recursivo descendente — gerado automaticamente pelo Grammar Playground.')
-    w('')
-    w('Gramática:')
-    for rule in rules:
-        alts = ' | '.join(repr(seq) for seq in rule.altlist.sequences)
-        w(f'    {rule.get_head_name()} -> {alts}')
-    w('')
-    w(f'Símbolo inicial: {start}')
     w('"""')
     w('')
+    w('from enum import Enum')
     w('import re')
     w('import sys')
     w('')
 
-    # -----------------------------------------------------------------
-    # Nó da árvore de derivação
-    # -----------------------------------------------------------------
-    w('# ' + '=' * 67)
+    w('# Tokens')
+    w('')
+    w('class Tokens(Enum):')
+    for i, name in enumerate(all_terminals):
+        enum_name = _enum_name(name)
+        w(f'    {enum_name} = {i}')
+    w(f'    EOF = -1')
+    w('')
+
     w('# Árvore de derivação')
-    w('# ' + '=' * 67)
     w('')
     w('class TreeNode:')
-    w('    """Nó da árvore de derivação."""')
-    w('')
     w('    def __init__(self, label, children=None, token_value=None):')
-    w('        self.label = label             # nome do NT ou terminal')
-    w('        self.children = children or [] # filhos (TreeNode)')
-    w('        self.token_value = token_value # valor do token (só para folhas)')
-    w('')
-    w('    def is_leaf(self):')
-    w('        return not self.children')
+    w('        self.label = label')
+    w('        self.children = children or []')
+    w('        self.token_value = token_value')
     w('')
     w('    def print_tree(self, prefix="", is_last=True):')
     w('        connector = "└── " if is_last else "├── "')
-    w('        if self.token_value is not None:')
-    w('            display = f"{self.label}: {self.token_value!r}"')
-    w('        else:')
-    w('            display = self.label')
+    w('        display = (f"{self.label}: {self.token_value!r}"')
+    w('                   if self.token_value is not None else self.label)')
     w('        print(prefix + connector + display)')
-    w('        extension = "    " if is_last else "│   "')
+    w('        ext = "    " if is_last else "│   "')
     w('        for i, child in enumerate(self.children):')
-    w('            child.print_tree(prefix + extension, is_last=(i == len(self.children) - 1))')
+    w('            child.print_tree(prefix + ext,')
+    w('                             is_last=(i == len(self.children) - 1))')
     w('')
 
-    # -----------------------------------------------------------------
-    # Lexer
-    # -----------------------------------------------------------------
-    w('# ' + '=' * 67)
-    w('# Lexer')
-    w('# ' + '=' * 67)
-    w('')
-    w('class Token:')
-    w('    def __init__(self, type_, value, line):')
-    w('        self.type = type_')
-    w('        self.value = value')
-    w('        self.line = line')
-    w('')
-    w('    def __repr__(self):')
-    w('        return f"Token({self.type!r}, {self.value!r})"')
-    w('')
-    w('')
-    w('class Lexer:')
-    w('    def __init__(self, source):')
-    w('        self.source = source')
-    w('        self.tokens = []')
-    w('        self._tokenize()')
-    w('')
-    w('    def _tokenize(self):')
-    w('        token_spec = [')
 
-    # Terminais declarados na TokenSection (com regex)
-    # Nota: os padrões vêm do utilizador já como regex válido.
-    # Escrevemos como raw string r'...' no código gerado.
-    for name, pattern in patterns.items():
-        w(f"            ({name!r}, r'{pattern}'),")
-
-    # Terminais inline (quoted strings) — gerar regex escapado
-    inline_terminals = set()
-    for rule in rules:
-        for seq in rule.altlist.sequences:
-            for sym in seq.symbols:
-                if sym.get_is_terminal() and sym.get_value().startswith(("'", '"')):
-                    inline_terminals.add(sym.get_value())
-
-    for lit in sorted(inline_terminals):
-        # Extrair o conteúdo entre aspas e escapar para regex
-        inner = lit[1:-1]
-        escaped = re.escape(inner)
-        w(f"            ({lit!r}, r'{escaped}'),")
-
-    w('        ]')
-    w('        pos = 0')
-    w('        line = 1')
-    w('        while pos < len(self.source):')
-    w('            # Ignorar espaços e tabs')
-    w('            m = re.match(r"[ \\t]+", self.source[pos:])')
-    w('            if m:')
-    w('                pos += m.end()')
-    w('                continue')
-    w('            # Newlines')
-    w('            m = re.match(r"\\n", self.source[pos:])')
-    w('            if m:')
-    w('                line += 1')
-    w('                pos += 1')
-    w('                continue')
-    w('            # Tentar cada padrão de token')
-    w('            matched = False')
-    w('            for name, pattern in token_spec:')
-    w('                m = re.match(pattern, self.source[pos:])')
-    w('                if m:')
-    w('                    self.tokens.append(Token(name, m.group(), line))')
-    w('                    pos += m.end()')
-    w('                    matched = True')
-    w('                    break')
-    w('            if not matched:')
-    w('                raise SyntaxError(')
-    w('                    f"Linha {line}: carácter inesperado {self.source[pos]!r}"')
-    w('                )')
-    w('        self.tokens.append(Token("$", "", line))')
+    w('# Tokenizador')
     w('')
+    w('def tokenizer(source):')
+    w('    result = []')
+    w('    while len(source) > 0:')
 
-    # -----------------------------------------------------------------
-    # Parser
-    # -----------------------------------------------------------------
-    w('# ' + '=' * 67)
-    w('# Parser recursivo descendente')
-    w('# ' + '=' * 67)
-    w('')
-    w('class Parser:')
-    w('    def __init__(self, tokens):')
-    w('        self.tokens = tokens')
-    w('        self.pos = 0')
-    w('')
-    w('    def current(self):')
-    w('        """Token atual (lookahead)."""')
-    w('        return self.tokens[self.pos]')
-    w('')
-    w('    def match(self, expected_type):')
-    w('        """Consome o token atual se for do tipo esperado."""')
-    w('        tok = self.current()')
-    w('        if tok.type == expected_type:')
-    w('            self.pos += 1')
-    w('            return TreeNode(expected_type, token_value=tok.value)')
+    _inline = {t: t[1:-1] for t in all_terminals if t.startswith(("'", '"'))}
+    _branches = (
+        [(re.escape(inner), _enum_name(lit))
+         for lit, inner in sorted(_inline.items(), key=lambda x: -len(x[1]))]
+        + [(pat, _enum_name(nm)) for nm, pat in patterns.items()]
+    )
+    for _idx, (_pat, _enum_n) in enumerate(_branches):
+        _kw = 'if' if _idx == 0 else 'elif'
+        w(f'        {_kw} m := re.match(r"{_pat}", source):')
+        w(f'            result.append((Tokens.{_enum_n}, m.group()))')
+        w(f'            source = source[m.end():]')
+
+    w('        elif source[0] in " \\n\\t":')
+    w('            source = source[1:]')
     w('        else:')
-    w('            raise SyntaxError(')
-    w('                f"Linha {tok.line}: esperado {expected_type!r}, "')
-    w('                f"encontrado {tok.type!r} ({tok.value!r})"')
-    w('            )')
-    w('')
-    w('    def match_value(self, expected_value, label):')
-    w('        """Consome o token atual se tiver o valor esperado (para terminais inline)."""')
-    w('        tok = self.current()')
-    w('        if tok.value == expected_value:')
-    w('            self.pos += 1')
-    w('            return TreeNode(label, token_value=tok.value)')
-    w('        else:')
-    w('            raise SyntaxError(')
-    w('                f"Linha {tok.line}: esperado {expected_value!r}, "')
-    w('                f"encontrado {tok.value!r}"')
-    w('            )')
+    w('            raise ValueError(f"Carácter inválido: {source[0]!r}")')
+    w('    return result + [(Tokens.EOF, None)]')
     w('')
 
-    # -----------------------------------------------------------------
-    # Gerar uma função parse_<NT> para cada não-terminal
-    # -----------------------------------------------------------------
+
+    w('')
+    w('tokens = None')
+    w('')
+    w('')
+    w('def current_token():')
+    w('    global tokens')
+    w('    return tokens[0]')
+    w('')
+    w('')
+    w('def next_token():')
+    w('    global tokens')
+    w('    tokens.pop(0)')
+    w('')
+
+
+    w('')
+    w('# Funções de reconhecimento')
+
     for rule in rules:
-        nt = rule.get_head_name()
-        seqs = rule.altlist.sequences
-        func_name = _safe_func_name(nt)
+        nt      = rule.get_head_name()
+        seqs    = rule.altlist.sequences
+        fn      = _nt_func(nt)
 
-        w(f'    def parse_{func_name}(self):')
-        w(f'        """Produção: {nt} -> {" | ".join(repr(s) for s in seqs)}"""')
-        w(f'        tok = self.current()')
+        w('')
+        w('')
+        alts_str = ' | '.join(repr(s) for s in seqs)
+        w(f'def parse_{fn}():')
+        w(f'    """Reconhece {nt} -> {alts_str}"""')
 
-        # Computar FIRST de cada alternativa
-        seq_firsts = []
-        for seq in seqs:
-            sf = first_of_seq(seq.symbols, first, nts)
-            seq_firsts.append(sf)
-
+        seq_firsts   = [first_of_seq(seq.symbols, first, nts) for seq in seqs]
         first_branch = True
-        epsilon_idx = None
+        epsilon_idx  = None
 
         for i, (seq, sf) in enumerate(zip(seqs, seq_firsts)):
-            # Verificar se é a alternativa epsilon
-            is_epsilon_alt = (
-                len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
-            ) or (not seq.symbols)
-
-            if is_epsilon_alt or (sf == {'ε'}):
+            is_eps = (
+                (len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon())
+                or not seq.symbols
+            )
+            if is_eps or sf == {'ε'}:
                 epsilon_idx = i
                 continue
 
-            # Construir condição de lookahead
-            conditions = []
-            for terminal in sorted(sf - {'ε'}):
-                conditions.append(_lookahead_condition(terminal))
-
-            if not conditions:
+            terms = sorted(sf - {'ε'})
+            if not terms:
                 continue
 
-            cond_str = ' or '.join(conditions)
-            keyword = 'if' if first_branch else 'elif'
-            first_branch = False
-
-            w(f'        {keyword} {cond_str}:')
-            lookahead_str = ', '.join(sorted(sf - {'ε'}))
-            w(f'            # {nt} -> {repr(seq)}  [lookahead: {{{lookahead_str}}}]')
-            _gen_seq_code(w, seq, nt, nts)
-
-        # Alternativa epsilon / anulável — usar FOLLOW
-        if epsilon_idx is not None:
-            seq = seqs[epsilon_idx]
-            follow_terms = follow.get(nt, set())
-            follow_str = ', '.join(sorted(follow_terms))
-
+            # Gerar case do match — múltiplos tokens com '|'
             if first_branch:
-                # Só existe a alternativa epsilon
-                w(f'        # {nt} -> ε  [FOLLOW({nt}): {{{follow_str}}}]')
-                w(f'        return TreeNode({nt!r}, children=[TreeNode("ε")])')
+                w(f'    match current_token():')
+                first_branch = False
+
+            # Python match/case: vários padrões no mesmo case com '|'
+            case_patterns = ' | '.join(
+                f'(Tokens.{_enum_name(t)}, _)' for t in terms
+            )
+            w(f'        case {case_patterns}:')
+            w(f'            # {nt} -> {repr(seq)}')
+            _emit_seq(w, seq, nt, nts)
+
+        # Alternativa epsilon / anulável  →  case _:
+        if epsilon_idx is not None:
+            fol_str = ', '.join(sorted(follow.get(nt, set())))
+            if first_branch:
+                # Só existe epsilon — nem precisamos de match
+                w(f'    # {nt} -> ε  [FOLLOW: {{{fol_str}}}]')
+                w(f'    return TreeNode({nt!r}, children=[TreeNode("ε")])')
             else:
-                w(f'        else:')
-                w(f'            # {nt} -> ε  [lookahead ∉ FIRST → FOLLOW({nt}): {{{follow_str}}}]')
+                w(f'        case _:')
+                w(f'            # {nt} -> ε  [FOLLOW: {{{fol_str}}}]')
                 w(f'            return TreeNode({nt!r}, children=[TreeNode("ε")])')
         else:
-            # Sem alternativa epsilon — erro se nenhum branch foi tomado
             if not first_branch:
-                w(f'        else:')
-                w(f'            raise SyntaxError(')
-                w(f'                f"Linha {{tok.line}}: token inesperado {{tok.type!r}} "')
-                w(f'                f"({{tok.value!r}}) ao expandir {nt}"')
+                w(f'        case err:')
+                w(f'            raise ValueError(')
+                w(f'                f"Estava à espera de {nt}, mas recebi {{err}}"')
                 w(f'            )')
+            else:
+                w(f'    raise ValueError(f"Token inesperado ao expandir {nt}: {{current_token()}}")')
 
-        w('')
 
-    # -----------------------------------------------------------------
-    # Função parse() principal
-    # -----------------------------------------------------------------
-    w(f'    def parse(self):')
-    w(f'        """Ponto de entrada — parse do símbolo inicial."""')
-    w(f'        tree = self.parse_{_safe_func_name(start)}()')
-    w(f'        if self.current().type != "$":')
-    w(f'            tok = self.current()')
-    w(f'            raise SyntaxError(')
-    w(f'                f"Linha {{tok.line}}: tokens extra após o fim do programa: "')
-    w(f'                f"{{tok.type!r}} ({{tok.value!r}})"')
-    w(f'            )')
-    w(f'        return tree')
+    w('')
+    w('')
+    w('def parse(tk):')
+    w('    global tokens')
+    w('    tokens = tk')
+    w(f'    result = parse_{_nt_func(start)}()')
+    w('    if current_token()[0] != Tokens.EOF:')
+    w('        raise ValueError(f"Tokens extra após o fim: {current_token()}")')
+    w('    return result')
     w('')
 
-    # -----------------------------------------------------------------
-    # Main
-    # -----------------------------------------------------------------
-    w('')
-    w('# ' + '=' * 67)
-    w('# Main')
-    w('# ' + '=' * 67)
+
     w('')
     w('def main():')
     w('    if len(sys.argv) > 1:')
     w('        with open(sys.argv[1], encoding="utf-8") as f:')
     w('            source = f.read()')
     w('    else:')
-    w('        source = input("Frase a analisar: ")')
-    w('')
-    w('    lex = Lexer(source)')
-    w('    print("Tokens:", lex.tokens)')
-    w('    print()')
-    w('')
-    w('    parser = Parser(lex.tokens)')
+    w('        source = input("? ")')
     w('    try:')
-    w('        tree = parser.parse()')
-    w('        print("Árvore de derivação:")')
+    w('        tk = tokenizer(source)')
+    w('        tree = parse(tk)')
     w('        tree.print_tree()')
-    w('    except SyntaxError as e:')
-    w('        print(f"Erro: {e}")')
+    w('    except (ValueError, SyntaxError) as e:')
+    w('        print(f"Erro: {e}", file=sys.stderr)')
     w('')
     w('')
     w('if __name__ == "__main__":')
@@ -329,56 +192,75 @@ def generate_rd_parser(grammar, first, follow):
     return '\n'.join(lines)
 
 
-# =====================================================================
-# Funções auxiliares internas
-# =====================================================================
 
 
-def _safe_func_name(nt):
+def _collect_terminals(rules, patterns):
+    """Recolhe todos os terminais: declarados + inline."""
+    result = list(patterns.keys())  # declarados com regex
+    seen = set(result)
+    for rule in rules:
+        for seq in rule.altlist.sequences:
+            for sym in seq.symbols:
+                if sym.get_is_terminal():
+                    v = sym.get_value()
+                    if v not in seen:
+                        result.append(v)
+                        seen.add(v)
+    return result
+
+
+def _enum_name(terminal):
     """
-    Converte o nome de um não-terminal num nome de função Python válido.
-    Ex: Expr' -> Expr_prime, StmtList -> StmtList
-    """
-    name = nt.replace("'", "_prime")
-    name = re.sub(r'[^A-Za-z0-9_]', '_', name)
-    return name
-
-
-def _lookahead_condition(terminal):
-    """
-    Gera a condição Python para verificar se o token atual corresponde
-    ao terminal dado.
-
-    Terminais nomeados (ID, NUMBER) → tok.type == 'ID'
-    Terminais inline (';', '+')    → tok.value == ';'
+    Converte um terminal para nome de membro do Enum.
+    'ID' → ID,  '+'  → PLUS,  ':=' → ASSIGN_EQ, etc.
+    Para inline strings: strip aspas, escapar caracteres especiais.
     """
     if terminal.startswith(("'", '"')):
         inner = terminal[1:-1]
-        return f'tok.value == {inner!r}'
+        # Mapeamentos comuns
+        _MAP = {
+            '+': 'PLUS', '-': 'MINUS', '*': 'TIMES', '/': 'DIVIDE',
+            '(': 'LPAREN', ')': 'RPAREN', '[': 'LBRACKET', ']': 'RBRACKET',
+            '{': 'LBRACE', '}': 'RBRACE', ';': 'SEMI', ',': 'COMMA',
+            '.': 'DOT', ':': 'COLON', '=': 'EQ', '!': 'BANG',
+            '<': 'LT', '>': 'GT', ':=': 'ASSIGN', '==': 'EQEQ',
+            '!=': 'NEQ', '<=': 'LEQ', '>=': 'GEQ', '->': 'ARROW',
+            '|': 'PIPE', '&': 'AMP', '%': 'PERCENT', '^': 'CARET',
+        }
+        if inner in _MAP:
+            return _MAP[inner]
+        # Fallback: usar repr escapado
+        name = re.sub(r'[^A-Za-z0-9]', '_', inner).upper()
+        return name or 'TOK'
     else:
-        return f'tok.type == {terminal!r}'
+        return terminal.upper()
 
 
-def _gen_seq_code(w, seq, nt, nts):
+def _nt_func(nt):
+    """Converte nome do NT para sufixo de função.
+    Ex: Expr' → Expr_prime,  StmtList → StmtList"""
+    name = nt.replace("'", "_prime")
+    return re.sub(r'[^A-Za-z0-9_]', '_', name)
+
+
+def _emit_seq(w, seq, nt, nts):
     """
-    Gera o código para processar uma sequência (alternativa) de símbolos.
-    Cada símbolo gera ou um match (terminal) ou uma chamada recursiva (NT).
+    Emite o corpo de uma alternativa dentro de um `case`:
+      - terminal → next_token(); children.append(TreeNode(...))
+      - NT       → children.append(parse_X())
+      - epsilon  → children.append(TreeNode('ε'))
     """
     w(f'            children = []')
-
     for sym in seq.symbols:
         if sym.get_is_epsilon():
             w(f'            children.append(TreeNode("ε"))')
         elif sym.get_is_terminal():
             val = sym.get_value()
-            if val.startswith(("'", '"')):
-                inner = val[1:-1]
-                w(f'            children.append(self.match_value({inner!r}, {val!r}))')
-            else:
-                w(f'            children.append(self.match({val!r}))')
+            enum_n = _enum_name(val)
+            w(f'            _, _v = current_token()')
+            w(f'            next_token()')
+            w(f'            children.append(TreeNode({val!r}, token_value=_v))')
         else:
-            # Não-terminal — chamada recursiva
-            func = _safe_func_name(sym.get_value())
-            w(f'            children.append(self.parse_{func}())')
-
+            fn = _nt_func(sym.get_value())
+            w(f'            children.append(parse_{fn}())')
     w(f'            return TreeNode({nt!r}, children=children)')

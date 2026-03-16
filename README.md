@@ -1,4 +1,5 @@
 # Sugestões
 
-- guardar o parser gerado -> ver o código gerado
-- algoritmo que usa a tabela para fazer o reconhecimento
+- alterar comentarios da grammar.md
+- codigo da arvore que permita coisar um exemplo especifico
+- terminar td

@@ -118,66 +118,66 @@ def run_pipeline(source, test_phrases=None):
         print(f"✓ Parser dirigido por tabela gerado   → {td_file}")
 
         # ── Teste do Parser RD ────────────────────────────────────────
-        if test_phrases:
-            sep("FASE 6 — Teste do parser recursivo descendente")
-            ns_rd = {}
-            exec(rd_code, ns_rd)
-            for phrase in test_phrases:
-                print(f"\nFrase: {phrase!r}")
-                try:
-                    lex = ns_rd['Lexer'](phrase)
-                    print(f"Tokens: {lex.tokens[:-1]}")
-                    p = ns_rd['Parser'](lex.tokens)
-                    tree = p.parse()
-                    print("Árvore de derivação:")
-                    tree.print_tree()
-                except SyntaxError as e:
-                    print(f"  ✗ Erro: {e}")
+        # if test_phrases:
+        #     sep("FASE 6 — Teste do parser recursivo descendente")
+        #     ns_rd = {}
+        #     exec(rd_code, ns_rd)
+        #     for phrase in test_phrases:
+        #         print(f"\nFrase: {phrase!r}")
+        #         try:
+        #             lex = ns_rd['Lexer'](phrase)
+        #             print(f"Tokens: {lex.tokens[:-1]}")
+        #             p = ns_rd['Parser'](lex.tokens)
+        #             tree = p.parse()
+        #             print("Árvore de derivação:")
+        #             tree.print_tree()
+        #         except SyntaxError as e:
+        #             print(f"  ✗ Erro: {e}")
 
         # ── Teste do Parser Dirigido por Tabela ───────────────────────
-        if test_phrases:
-            sep("FASE 7 — Teste do parser dirigido por tabela")
-            ns_td = {}
-            exec(td_code, ns_td)
-            for phrase in test_phrases:
-                print(f"\nFrase: {phrase!r}")
-                try:
-                    lex = ns_td['Lexer'](phrase)
-                    p = ns_td['Parser'](lex.tokens)
-                    tree = p.parse()
-                    print("Passos do parsing (pilha):")
-                    p.print_steps()
-                    print("\nÁrvore de derivação:")
-                    tree.print_tree()
-                except SyntaxError as e:
-                    print(f"  ✗ Erro: {e}")
+        # if test_phrases:
+        #     sep("FASE 7 — Teste do parser dirigido por tabela")
+        #     ns_td = {}
+        #     exec(td_code, ns_td)
+        #     for phrase in test_phrases:
+        #         print(f"\nFrase: {phrase!r}")
+        #         try:
+        #             lex = ns_td['Lexer'](phrase)
+        #             p = ns_td['Parser'](lex.tokens)
+        #             tree = p.parse()
+        #             print("Passos do parsing (pilha):")
+        #             p.print_steps()
+        #             print("\nÁrvore de derivação:")
+        #             tree.print_tree()
+        #         except SyntaxError as e:
+        #             print(f"  ✗ Erro: {e}")
 
-        # ── Comparação RD vs Tabela ───────────────────────────────────
-        if test_phrases:
-            sep("FASE 8 — Comparação RD vs Tabela")
-            ns_rd2 = {}; exec(rd_code, ns_rd2)
-            ns_td2 = {}; exec(td_code, ns_td2)
+        # # ── Comparação RD vs Tabela ───────────────────────────────────
+        # if test_phrases:
+        #     sep("FASE 8 — Comparação RD vs Tabela")
+        #     ns_rd2 = {}; exec(rd_code, ns_rd2)
+        #     ns_td2 = {}; exec(td_code, ns_td2)
 
-            all_ok = True
-            for phrase in test_phrases:
-                try:
-                    # RD
-                    rd_lex = ns_rd2['Lexer'](phrase)
-                    rd_p   = ns_rd2['Parser'](rd_lex.tokens)
-                    rd_p.parse()
+        #     all_ok = True
+        #     for phrase in test_phrases:
+        #         try:
+        #             # RD
+        #             rd_lex = ns_rd2['Lexer'](phrase)
+        #             rd_p   = ns_rd2['Parser'](rd_lex.tokens)
+        #             rd_p.parse()
 
-                    # Tabela
-                    td_lex = ns_td2['Lexer'](phrase)
-                    td_p   = ns_td2['Parser'](td_lex.tokens)
-                    td_p.parse()
+        #             # Tabela
+        #             td_lex = ns_td2['Lexer'](phrase)
+        #             td_p   = ns_td2['Parser'](td_lex.tokens)
+        #             td_p.parse()
 
-                    print(f"  ✓  {phrase!r}  — ambos aceitam")
-                except SyntaxError as e:
-                    print(f"  ✗  {phrase!r}  — {e}")
-                    all_ok = False
+        #             print(f"  ✓  {phrase!r}  — ambos aceitam")
+        #         except SyntaxError as e:
+        #             print(f"  ✗  {phrase!r}  — {e}")
+        #             all_ok = False
 
-            if all_ok:
-                print("\n✓ Ambos os parsers produzem resultados consistentes.")
+            # if all_ok:
+            #     print("\n✓ Ambos os parsers produzem resultados consistentes.")
 
     print()
 
