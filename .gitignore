@@ -1,6 +1,7 @@
 .DS_Store
-*/DS_Store
+*/.DS_Store
 */parser.out
 */parsetab.py
 */__pycache__
 generated_parsers/
+parsetab.py

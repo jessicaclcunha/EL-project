@@ -45,7 +45,6 @@ def p_rule_with_newline(p):
 
 def p_rule_without_newline(p):
     """rule : NON_TERMINAL ARROW altlist"""
-    # Suporte para última regra sem newline no fim do ficheiro
     p[0] = RuleNode(head=IdentifierNode(p[1]), altlist=AltListNode(p[3]))
 
 
@@ -116,7 +115,6 @@ def p_tokendecl_with_newline(p):
 
 def p_tokendecl_without_newline(p):
     """tokendecl : TERMINAL EQUALS REGEX"""
-    # Suporte para último token sem newline no fim do ficheiro
     p[0] = TokenDeclNode(name=TerminalNameNode(p[1]), regex=RegexNode(p[3]))
 
 
@@ -170,8 +168,6 @@ _parse_warnings = []
 def parse_grammar(source: str) -> SpecNode | None:
     """
     Recebe o texto da gramática e devolve a ASA (SpecNode) ou None em caso de erro.
-
-    Passos:
         1. Parsing (lexer + parser PLY)
         2. Fusão de regras do mesmo não-terminal
         3. Validação semântica

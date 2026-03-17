@@ -227,9 +227,6 @@ class TokenSectionNode:
             decl.print_tree(prefix + ext, is_last=(i == len(self.decls) - 1))
 
 
-# ---------------------------------------------------------------------------
-# Nó Axioma
-# ---------------------------------------------------------------------------
 
 class AxiomaNode:
     """Axioma → 'start' ':' NON_TERMINAL"""
@@ -256,9 +253,6 @@ class AxiomaNode:
 class SpecNode:
     """
     Spec → Axioma RuleList TokenSection
-
-    Raiz da ASA. O axioma é declarado explicitamente com 'start: NON_TERMINAL'.
-    TokenSection pode estar vazia.
     """
 
     def __init__(self, axioma, rulelist, tokensection):

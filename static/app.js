@@ -63,6 +63,7 @@ $('btn-analyse').addEventListener('click', async () => {
   if (!src) return;
 
   setLoading(btn, true);
+  $('ff-banners').innerHTML = '';
   ready = false;
   $('btn-generate').disabled = true;
 
@@ -81,13 +82,25 @@ $('btn-analyse').addEventListener('click', async () => {
     }
 
     // banners
-    const msgs = [...(d.warnings || [])];
+    const warnings = d.warnings || [];
+    if (warnings.length > 0) {
+      showBanners('ff-banners', warnings, 'warn');
+    }
+ 
+    // Banner principal: OK ou conflito (em separado, abaixo dos avisos)
+    const $banners = $('ff-banners');
     if (d.conflicts.length === 0) {
-      msgs.push('Gramática LL(1) válida — sem conflitos.');
-      showBanners('ff-banners', msgs, 'ok');
+      // Gramática LL(1) sem conflitos → verde
+      $banners.innerHTML += `<div class="banner ok"><span>✓</span><span>Gramática LL(1) válida — sem conflitos.</span></div>`;
     } else {
-      if (!msgs.length) msgs.push(`${d.conflicts.length} conflito(s) detectado(s).`);
-      showBanners('ff-banners', msgs, 'warn');
+      // Conflitos: mostrar quantos + resultado LL(k)
+      let msg = `${d.conflicts.length} conflito(s) LL(1) detectado(s).`;
+      if (d.llk !== null && d.llk !== undefined) {
+        msg += `  A gramática <strong>É LL(${d.llk})</strong>.`;
+      } else {
+        msg += `  A gramática <strong>não é LL(k)</strong> para k ≤ 5.`;
+      }
+      $banners.innerHTML += `<div class="banner warn"><span>⚠</span><span>${msg}</span></div>`;
     }
 
     // FIRST / FOLLOW
@@ -201,6 +214,8 @@ $('btn-generate').addEventListener('click', async () => {
     $('parsers-result').style.display = 'block';
     $('code-rd').textContent = d.rd;
     $('code-td').textContent = d.td;
+    hljs.highlightElement($('code-rd'));
+    hljs.highlightElement($('code-td'));
     showTab('parsers');
   } finally {
     setLoading(btn, false);

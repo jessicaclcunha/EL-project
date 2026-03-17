@@ -5,6 +5,12 @@ from gp_parser_rd import generate_rd_parser
 from gp_parser_td import TableParser, generate_table_parser
 import os
 
+YELLOW = "\033[93m"
+RESET  = "\033[0m"
+
+def warn(msg):
+    print(f"{YELLOW}  ⚠  {msg}{RESET}")
+
 
 EXAMPLE_GRAMMAR = """\
 start: Program
@@ -49,7 +55,7 @@ def run_pipeline(source, test_phrases=None):
     if warnings:
         print()
         for w in warnings:
-            print(f"  {w}")
+            warn(w)
 
     if grammar is None:
         print("\nAbortado: erros encontrados.")
@@ -101,18 +107,16 @@ def run_pipeline(source, test_phrases=None):
         # ── Parser Recursivo Descendente ─────────────────────────────
         rd_code = generate_rd_parser(grammar, first, follow)
 
-        os.makedirs("generated_parsers", exist_ok=True)
-        rd_file = "generated_parsers/rd.py"
+        os.makedirs("src/generated_parsers", exist_ok=True)
+        rd_file = "src/generated_parsers/rd.py"
         with open(rd_file, "w", encoding="utf-8") as f:
             f.write(rd_code)
         print(f"✓ Parser recursivo descendente gerado → {rd_file}")
-        nts_list = grammar.get_nonterminals()
-        print(f"  Funções parse_*: {len(nts_list)} ({', '.join(sorted(nts_list))})")
 
         # ── Parser Dirigido por Tabela ────────────────────────────────
         td_code = generate_table_parser(grammar, first, follow)
 
-        td_file = "generated_parsers/td.py"
+        td_file = "src/generated_parsers/td.py"
         with open(td_file, "w", encoding="utf-8") as f:
             f.write(td_code)
         print(f"✓ Parser dirigido por tabela gerado   → {td_file}")
@@ -145,7 +149,7 @@ def run_pipeline(source, test_phrases=None):
         #             lex = ns_td['Lexer'](phrase)
         #             p = ns_td['Parser'](lex.tokens)
         #             tree = p.parse()
-        #             print("Passos do parsing (pilha):")
+        #             print("Passos do parsing (stack):")
         #             p.print_steps()
         #             print("\nÁrvore de derivação:")
         #             tree.print_tree()

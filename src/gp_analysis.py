@@ -222,59 +222,109 @@ def print_parse_table(table, grammar):
 def _seq_to_str(symbols):
     return ' '.join(s.get_value() for s in symbols) if symbols else 'ε'
 
-def _get_first_symbol(seq):
-    if seq.symbols:
-        return seq.symbols[0].get_value()
-    return None
 
-def left_factor(rule_name, sequences):
-    groups = {}
-    for seq in sequences:
-        first_sym = _get_first_symbol(seq)
-        key = first_sym if first_sym else 'ε'
-        groups.setdefault(key, []).append(seq)
-    new_rules = []
-    single = []
-    factored = []
-    prime_counter = [0]
-    def next_prime():
-        prime_counter[0] += 1
-        return rule_name + ("'" * prime_counter[0])
-    for key, seqs in groups.items():
-        if len(seqs) == 1:
-            single.append(_seq_to_str(seqs[0].symbols))
-        else:
-            prefix = _longest_common_prefix(seqs)
-            prefix_str = ' '.join(s.get_value() for s in prefix)
-            remainders = []
-            for seq in seqs:
-                rest = seq.symbols[len(prefix):]
-                remainders.append(_seq_to_str(rest) if rest else 'ε')
-            prime_name = next_prime()
-            factored.append((prefix_str, prime_name, remainders))
-    main_alts = single[:]
-    for prefix_str, prime_name, _ in factored:
-        main_alts.append(f"{prefix_str} {prime_name}")
-    new_rules.append(f"{rule_name} -> {' | '.join(main_alts)}")
-    for _, prime_name, remainders in factored:
-        new_rules.append(f"{prime_name} -> {' | '.join(remainders)}")
-    return new_rules
-
-def _longest_common_prefix(sequences):
+def longest_common_prefix_syms(sequences):
+    """Devolve lista de valores (str) do prefixo comum mais longo entre as sequências."""
     if not sequences:
         return []
-    min_len = min(len(seq.symbols) for seq in sequences)
+    min_len = min(len(seq) for seq in sequences)
     prefix = []
     for i in range(min_len):
-        val = sequences[0].symbols[i].get_value()
-        if all(seq.symbols[i].get_value() == val for seq in sequences):
-            prefix.append(sequences[0].symbols[i])
+        val = sequences[0][i]
+        if all(seq[i] == val for seq in sequences):
+            prefix.append(val)
         else:
             break
     return prefix
 
+
+def left_factor_recursive(rule_name, alt_lists, prime_counter):
+    """
+    alt_lists: lista de listas de str (símbolos de cada alternativa).
+    Devolve lista de strings "NT -> alt1 | alt2 | ..." prontas a inserir na gramática.
+    Fatoriza recursivamente até não haver prefixo comum.
+    """
+    # Agrupar por primeiro símbolo
+    groups = {}
+    for syms in alt_lists:
+        key = syms[0] if syms else 'ε'
+        groups.setdefault(key, []).append(syms)
+
+    new_rules = []
+    main_alts = []
+
+    for key, group in groups.items():
+        if len(group) == 1:
+            s = ' '.join(group[0]) if group[0] else 'ε'
+            main_alts.append(s)
+        else:
+            prefix = longest_common_prefix_syms(group)
+            if not prefix:
+                for syms in group:
+                    s = ' '.join(syms) if syms else 'ε'
+                    main_alts.append(s)
+                continue
+
+            prime_counter[0] += 1
+            prime_name = rule_name + "'" * prime_counter[0]
+
+            prefix_str = ' '.join(prefix)
+            main_alts.append(f"{prefix_str} {prime_name}")
+
+            remainders = []
+            for syms in group:
+                rest = syms[len(prefix):]
+                remainders.append(rest if rest else [])  # [] = ε
+
+            # Verificar se os restos ainda têm conflito → fatorizar recursivamente
+            # Agrupar restos por primeiro símbolo para detetar se há prefixo
+            rem_groups = {}
+            for r in remainders:
+                k = r[0] if r else 'ε'
+                rem_groups.setdefault(k, []).append(r)
+
+            needs_more = any(len(v) > 1 for v in rem_groups.values())
+
+            if needs_more:
+                sub_rules = left_factor_recursive(prime_name, remainders, prime_counter)
+                new_rules.extend(sub_rules)
+            else:
+                rem_strs = [' '.join(r) if r else 'ε' for r in remainders]
+                new_rules.append(f"{prime_name} -> {' | '.join(rem_strs)}")
+
+    new_rules.insert(0, f"{rule_name} -> {' | '.join(main_alts)}")
+    return new_rules
+
+
+def left_factor(rule_name, sequences):
+    """
+    Ponto de entrada para fatorização à esquerda.
+    sequences: lista de SeqNode
+    """
+    # Converter SeqNode → lista de str
+    alt_lists = []
+    for seq in sequences:
+        if not seq.symbols or (len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()):
+            alt_lists.append([])  # ε
+        else:
+            alt_lists.append([s.get_value() for s in seq.symbols])
+
+    prime_counter = [0]
+    return left_factor_recursive(rule_name, alt_lists, prime_counter)
+
+
+def _has_left_recursion(rule_name, sequences):
+    return any(
+        seq.symbols and seq.symbols[0].get_value() == rule_name
+        for seq in sequences
+    )
+
+
 def eliminate_left_recursion(rule_name, sequences):
-    prime = f"{rule_name}'"
+    """
+    Elimina recursividade à esquerda directa.
+    Devolve lista de regras em texto, ou None se não houver recursão.
+    """
     recursive = []
     nonrecursive = []
     for seq in sequences:
@@ -282,50 +332,82 @@ def eliminate_left_recursion(rule_name, sequences):
             recursive.append(seq)
         else:
             nonrecursive.append(seq)
+
     if not recursive:
         return None
-    new_rules = []
+
+    prime = f"{rule_name}'"
     base_alts = [f"{_seq_to_str(seq.symbols)} {prime}" for seq in nonrecursive]
-    new_rules.append(f"{rule_name} -> {' | '.join(base_alts)}")
-    rec_alts = [f"{_seq_to_str(seq.symbols[1:])} {prime}" for seq in recursive]
+    rec_alts  = [f"{_seq_to_str(seq.symbols[1:])} {prime}" if seq.symbols[1:] else prime
+                 for seq in recursive]
     rec_alts.append('ε')
-    new_rules.append(f"{prime} -> {' | '.join(rec_alts)}")
-    return new_rules
+
+    return [
+        f"{rule_name} -> {' | '.join(base_alts)}",
+        f"{prime} -> {' | '.join(rec_alts)}",
+    ]
+
 
 def suggest_fixes(grammar, conflicts):
     if not conflicts:
         return []
+
     suggestions = []
     seen = set()
+
     for c in conflicts:
         A = c['nonterminal']
         if A in seen:
             continue
         seen.add(A)
+
         rule = next(r for r in grammar.get_rules() if r.get_head_name() == A)
         seqs = rule.altlist.sequences
+        original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
+
+        # Tentar eliminar recursividade à esquerda
+        if _has_left_recursion(A, seqs):
+            result = eliminate_left_recursion(A, seqs)
+            suggestions.append({
+                'nonterminal': A,
+                'type': c['type'],
+                'technique': 'Eliminação de recursividade à esquerda',
+                'new_rules': result,
+            })
+            continue
+
+        # Tentar fatorização à esquerda (só faz sentido para FIRST/FIRST)
         if c['type'] == 'FIRST/FIRST':
-            result = eliminate_left_recursion(A, seqs)
-            if result:
-                suggestions.append({'nonterminal': A, 'type': 'FIRST/FIRST', 'technique': 'Eliminação de recursividade à esquerda', 'new_rules': result})
+            new_rules = left_factor(A, seqs)
+            # Verificar se houve alteração real
+            if len(new_rules) == 1 and new_rules[0] == original:
+                suggestions.append({
+                    'nonterminal': A,
+                    'type': c['type'],
+                    'technique': 'Sem correção automática possível',
+                    'new_rules': ['⚠  A gramática pode ser intrinsecamente ambígua neste não-terminal.'],
+                })
             else:
-                new_rules = left_factor(A, seqs)
-                original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
-                if len(new_rules) == 1 and new_rules[0] == original:
-                    suggestions.append({'nonterminal': A, 'type': 'FIRST/FIRST', 'technique': 'Sem correção automática possível', 'new_rules': ['⚠  A gramática pode ser intrinsecamente ambígua neste não-terminal.']})
-                else:
-                    suggestions.append({'nonterminal': A, 'type': 'FIRST/FIRST', 'technique': 'Fatorização à esquerda', 'new_rules': new_rules})
-        elif c['type'] == 'FIRST/FOLLOW':
-            result = eliminate_left_recursion(A, seqs)
-            if result:
-                suggestions.append({'nonterminal': A, 'type': 'FIRST/FOLLOW', 'technique': 'Eliminação de recursividade à esquerda', 'new_rules': result})
-            else:
-                new_rules = left_factor(A, seqs)
-                original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
-                if len(new_rules) == 1 and new_rules[0] == original:
-                    suggestions.append({'nonterminal': A, 'type': 'FIRST/FOLLOW', 'technique': 'Sem correção automática possível', 'new_rules': ['⚠  Conflito FIRST/FOLLOW sem prefixo comum — a gramática pode ser intrinsecamente ambígua.']})
-                else:
-                    suggestions.append({'nonterminal': A, 'type': 'FIRST/FOLLOW', 'technique': 'Fatorização à esquerda (prefixo anulável)', 'new_rules': new_rules})
+                suggestions.append({
+                    'nonterminal': A,
+                    'type': c['type'],
+                    'technique': 'Fatorização à esquerda',
+                    'new_rules': new_rules,
+                })
+            continue
+
+        # FIRST/FOLLOW sem recursão à esquerda
+        # Neste caso a fatorização não resolve — reportar sem correção automática
+        suggestions.append({
+            'nonterminal': A,
+            'type': c['type'],
+            'technique': 'Sem correção automática possível',
+            'new_rules': [
+                f'⚠  Conflito FIRST/FOLLOW em {A}: a gramática pode ser intrinsecamente ambígua.',
+                f'   Verifica se as alternativas anuláveis e não-anuláveis partilham lookaheads.',
+            ],
+        })
+
     return suggestions
 
 def print_suggestions(suggestions):
@@ -342,3 +424,132 @@ def print_suggestions(suggestions):
         for rule in s['new_rules']:
             print(f"    {rule}")
         print()
+        
+
+def check_llk(grammar, max_k=5):
+    """
+    Verifica se a gramática é LL(k) para k = 1, 2, ..., max_k.
+    """
+    # Primeiro verificamos LL(1) com a função existente
+    first1 = compute_first(grammar)
+    follow1 = compute_follow(grammar, first1)
+    conflicts_1 = check_ll1(grammar, first1, follow1)
+
+    if not conflicts_1:
+        return 1, []   # já é LL(1)
+
+    nts = grammar.get_nonterminals()
+
+    for k in range(2, max_k + 1):
+        if is_llk(grammar, nts, k):
+            return k, conflicts_1
+
+    return None, conflicts_1   # não é LL(k) para nenhum k testado
+
+
+def first_k(symbols, token_patterns, k, nts, memo=None):
+    if memo is None:
+        memo = {}
+
+    if not symbols:
+        return {()}    # string vazia (epsilon)
+
+    sym = symbols[0]
+    rest = symbols[1:]
+
+    if sym.get_is_epsilon():
+        return {()}
+
+    if sym.get_is_terminal() or sym.get_value() not in nts:
+        # terminal: uma string de comprimento 1
+        token = sym.get_value()
+        # concatenar com FIRST_k do resto, truncando a k
+        rest_first = first_k(rest, token_patterns, k, nts, memo)
+        result = set()
+        for r in rest_first:
+            combined = (token,) + r
+            result.add(combined[:k])
+        return result
+
+    # não-terminal: expandir usando as regras
+    nt_name = sym.get_value()
+    key = (nt_name, k)
+    if key in memo:
+        return memo[key]
+
+    # evitar recursão infinita (recursividade à esquerda)
+    memo[key] = set()
+
+    return memo[key]   # retorna vazio se recursão detectada
+
+
+def is_llk(grammar, nts, k):
+    """
+    Verifica se a gramática é LL(k) usando uma abordagem aproximada.
+    """
+    # Tokenizar cada alternativa e calcular prefixos de comprimento k
+    for rule in grammar.get_rules():
+        A = rule.get_head_name()
+        seqs = rule.altlist.sequences
+
+        if len(seqs) < 2:
+            continue   # só uma alternativa → sem conflito possível
+
+        # Para cada alternativa, calcular todas as strings de k tokens
+        # que a podem iniciar (usando o lexer + lookahead sobre a gramática)
+        alt_lookaheads = []
+        for seq in seqs:
+            lk = lookahead_k(seq.symbols, grammar, nts, k, set())
+            alt_lookaheads.append(lk)
+
+        # Verificar se há sobreposição entre qualquer par de alternativas
+        for i in range(len(alt_lookaheads)):
+            for j in range(i + 1, len(alt_lookaheads)):
+                overlap = alt_lookaheads[i] & alt_lookaheads[j]
+                if overlap:
+                    return False   # conflito com k lookahead → não é LL(k)
+
+    return True   # sem conflitos → é LL(k)
+
+
+def lookahead_k(symbols, grammar, nts, k, visiting):
+    """
+    Calcula o conjunto de k-lookaheads para uma sequência de símbolos.
+    """
+    if k == 0 or not symbols:
+        return {()}   # string vazia
+
+    sym = symbols[0]
+    rest = symbols[1:]
+
+    if sym.get_is_epsilon():
+        return {()}
+
+    val = sym.get_value()
+
+    if sym.get_is_terminal() or val not in nts:
+        # terminal: prefixar com este token e continuar no resto
+        rest_lk = lookahead_k(rest, grammar, nts, k - 1, visiting)
+        result = set()
+        for r in rest_lk:
+            result.add((val,) + r)
+        return result
+
+    # não-terminal: evitar ciclos
+    if val in visiting:
+        return set()   # recursão detectada → retorna vazio (conservador)
+
+    visiting = visiting | {val}
+
+    # expandir todas as alternativas deste NT
+    result = set()
+    for rule in grammar.get_rules():
+        if rule.get_head_name() != val:
+            continue
+        for seq in rule.altlist.sequences:
+            # concatenar símbolos desta alternativa com o resto
+            expanded = list(seq.symbols) + list(rest)
+            lk = lookahead_k(expanded, grammar, nts, k, visiting)
+            result |= lk
+
+    return result

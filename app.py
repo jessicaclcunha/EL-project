@@ -7,10 +7,7 @@ from flask import Flask, render_template, request, jsonify, send_file
 sys.path.insert(0, 'src')
 
 from gp_parser   import parse_grammar, get_parse_errors, get_parse_warnings
-from gp_analysis import (
-    compute_first, compute_follow, first_of_seq,
-    check_ll1, suggest_fixes, build_parse_table,
-)
+from gp_analysis import *
 from gp_parser_rd import generate_rd_parser
 from gp_parser_td import generate_table_parser, TableParser
 
@@ -38,16 +35,22 @@ def analyse():
     conflicts   = check_ll1(grammar, first, follow)
     suggestions = suggest_fixes(grammar, conflicts)
     table       = build_parse_table(grammar, first, follow)
+     
+    llk_result = None
+    if conflicts:
+        k, _ = check_llk(grammar, max_k=5)
+        llk_result = k
 
     return jsonify({
         'ok':          True,
         'warnings':    warnings,
         'first':       {k: sorted(v) for k, v in first.items()},
         'follow':      {k: sorted(v) for k, v in follow.items()},
-        'lookahead':   _compute_lookahead(grammar, first, follow),
-        'conflicts':   _ser_conflicts(conflicts),
-        'suggestions': _ser_suggestions(suggestions),
-        'table':       _ser_table(table, grammar),
+        'lookahead':   compute_lookahead(grammar, first, follow),
+        'conflicts':   ser_conflicts(conflicts),
+        'suggestions': ser_suggestions(suggestions),
+        'table':       ser_table(table, grammar),
+        'llk':         llk_result,
     })
 
 
@@ -74,34 +77,48 @@ def apply_suggestions():
     if not replacements:
         return jsonify({'ok': False, 'errors': ['Nenhuma sugestão aplicável.']})
 
-    return jsonify({'ok': True, 'grammar': _rebuild_grammar(src, replacements)})
+    return jsonify({'ok': True, 'grammar': rebuild_grammar(src, replacements)})
 
 
-def _rebuild_grammar(src, replacements):
+def rebuild_grammar(src, replacements):
     """
-    Substitui as regras dos NTs afectados pelas sugestões.
+    Reconstrói a gramática substituindo as regras dos NTs afectados pelas sugestões.
     """
-    lines    = src.splitlines()
-    skip_nts = set(replacements.keys())
-    inserted = set()
+    lines = src.splitlines()
 
-    # Agrupar em blocos: (nt_ou_None, [linhas])
+    # --- Separar regras de tokens ---
+    TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*\s*=\s*/")
+    RULE_RE  = re.compile(r"^([A-Za-z][A-Za-z0-9_']*)\s*(->|→)")
+
+    rule_lines  = []
+    token_lines = []
+    in_tokens   = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not in_tokens and TOKEN_RE.match(stripped):
+            in_tokens = True
+        if in_tokens:
+            token_lines.append(line)
+        else:
+            rule_lines.append(line)
+
+    # --- Agrupar rule_lines em blocos por NT ---
     blocks = []
     i = 0
-    while i < len(lines):
-        line     = lines[i]
+    while i < len(rule_lines):
+        line     = rule_lines[i]
         stripped = line.strip()
-        m = re.match(r"^([A-Za-z][A-Za-z0-9_']*)\s*->", stripped)
+        m = RULE_RE.match(stripped)
         if m:
             nt          = m.group(1)
             block_lines = [line]
             i += 1
-            # absorver linhas de continuação da mesma regra
-            while i < len(lines):
-                nxt   = lines[i]
-                nxt_s = nxt.strip()
-                if not nxt_s or nxt_s.startswith('|') or (nxt and nxt[0] in (' ', '\t')):
-                    block_lines.append(nxt)
+            # absorver continuações (linhas com | ou indentadas)
+            while i < len(rule_lines):
+                nxt_s = rule_lines[i].strip()
+                if nxt_s.startswith('|') or (rule_lines[i] and rule_lines[i][0] in (' ', '\t')):
+                    block_lines.append(rule_lines[i])
                     i += 1
                 else:
                     break
@@ -110,23 +127,38 @@ def _rebuild_grammar(src, replacements):
             blocks.append((None, [line]))
             i += 1
 
-    # Reconstruir substituindo os blocos afectados
-    out = []
-    for nt, block_lines in blocks:
-        if nt in skip_nts:
-            if nt not in inserted:
-                out.extend(replacements[nt])
-                inserted.add(nt)
-            # bloco original descartado
+    # --- 3Reconstruir blocos de regras ---
+    pending = dict(replacements)   # nt → [linhas]
+    inserted = set()
+    out_rules = []
+
+    for (nt, block_lines) in blocks:
+        if nt is not None and nt in pending:
+            # Substituir este bloco pelas novas regras
+            out_rules.extend(pending[nt])
+            inserted.add(nt)
+            del pending[nt]
+
+            # Inserir imediatamente os NTs novos introduzidos por este NT
+            still_pending = list(pending.keys())
+            for new_nt in still_pending:
+                if new_nt.startswith(nt):
+                    out_rules.extend(pending[new_nt])
+                    inserted.add(new_nt)
+                    del pending[new_nt]
         else:
-            out.extend(block_lines)
+            out_rules.extend(block_lines)
 
-    # NTs que não existiam ainda no texto (caso raro)
-    for nt, rules in replacements.items():
-        if nt not in inserted:
-            out.extend(rules)
+    for nt, rules in pending.items():
+        out_rules.extend(rules)
 
-    return '\n'.join(out)
+    result_lines = out_rules
+    if token_lines:
+        if result_lines and result_lines[-1].strip():
+            result_lines.append('')
+        result_lines.extend(token_lines)
+
+    return '\n'.join(result_lines)
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -172,7 +204,7 @@ def parse_phrase():
 
     return jsonify({
         'ok':      True,
-        'tree_svg': _tree_to_svg(tree),
+        'tree_svg': tree_to_svg(tree),
         'steps':    parser.steps,
     })
 
@@ -202,13 +234,13 @@ def download(ptype):
                      as_attachment=True, download_name=name)
 
 
-def _is_epsilon(seq):
+def is_epsilon(seq):
     return not seq.symbols or (
         len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
     )
 
 
-def _compute_lookahead(grammar, first, follow):
+def compute_lookahead(grammar, first, follow):
     nts    = grammar.get_nonterminals()
     result = []
     for rule in grammar.get_rules():
@@ -217,7 +249,7 @@ def _compute_lookahead(grammar, first, follow):
             sf       = first_of_seq(seq.symbols, first, nts)
             nullable = 'ε' in sf
             la       = (sf - {'ε'}) | (follow.get(nt, set()) if nullable else set())
-            prod_str = 'ε' if _is_epsilon(seq) else ' '.join(s.get_value() for s in seq.symbols)
+            prod_str = 'ε' if is_epsilon(seq) else ' '.join(s.get_value() for s in seq.symbols)
             result.append({
                 'nt':         nt,
                 'production': f'{nt} → {prod_str}',
@@ -227,7 +259,7 @@ def _compute_lookahead(grammar, first, follow):
     return result
 
 
-def _ser_conflicts(conflicts):
+def ser_conflicts(conflicts):
     return [
         {'type': c['type'], 'nonterminal': c['nonterminal'],
          'message': c.get('message', '')}
@@ -235,7 +267,7 @@ def _ser_conflicts(conflicts):
     ]
 
 
-def _ser_suggestions(suggestions):
+def ser_suggestions(suggestions):
     return [
         {'nonterminal': s['nonterminal'], 'technique': s['technique'],
          'new_rules': s['new_rules']}
@@ -243,7 +275,7 @@ def _ser_suggestions(suggestions):
     ]
 
 
-def _ser_table(table, grammar):
+def ser_table(table, grammar):
     nts       = sorted(grammar.get_nonterminals())
     terminals = sorted({t for (_, t) in table})
     rows = []
@@ -254,14 +286,14 @@ def _ser_table(table, grammar):
             if not seqs:
                 continue
             seq = seqs[0]
-            rhs = 'ε' if _is_epsilon(seq) else ' '.join(s.get_value() for s in seq.symbols)
+            rhs = 'ε' if is_epsilon(seq) else ' '.join(s.get_value() for s in seq.symbols)
             cells[t] = f'{nt} → {rhs}' + (' ⚠' if len(seqs) > 1 else '')
         rows.append({'nt': nt, 'cells': cells})
     return {'terminals': terminals, 'rows': rows}
 
 
 
-def _tree_to_svg(root):
+def tree_to_svg(root):
     class Slot:
         def __init__(self, node, depth):
             self.nt     = node.label
