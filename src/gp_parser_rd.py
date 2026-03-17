@@ -45,12 +45,28 @@ def _is_inline(val):
 def _inline_inner(val):
     return val[1:-1]
 
+
+def _inline_ply_name(inner):
+    """Converte o símbolo inline num nome PLY válido. Ex: '[' -> 'LBRACK', ':=' -> 'COLON_EQ'"""
+    nome = re.sub(r'[^A-Za-z0-9]', '_', inner).strip('_').upper()
+    if not nome:
+        nome = 'SYM_' + str(ord(inner[0]))
+    return nome
+
+
 def generate_rd_parser(grammar, first, follow):
     nts      = grammar.get_nonterminals()
     start    = grammar.get_start()
     rules    = grammar.get_rules()
     patterns = grammar.get_token_patterns()
     all_terminals = _collect_terminals(rules, patterns)
+
+    # tokens inline: '[' -> 'LBRACK', ':=' -> 'COLON_EQ', etc.
+    inline_tokens = {}
+    for t in all_terminals:
+        if _is_inline(t):
+            inner = _inline_inner(t)
+            inline_tokens[_inline_ply_name(inner)] = inner
 
     lines = []
     w = lines.append
@@ -64,7 +80,6 @@ def generate_rd_parser(grammar, first, follow):
     w('  parse_X()    — reconhece o NT X; devolve TreeNode')
     w('"""')
     w('')
-    w('import re')
     w('import sys')
     w('')
 
@@ -85,31 +100,48 @@ def generate_rd_parser(grammar, first, follow):
     w('            child.print_tree(prefix + ext, last=(i == len(self.children) - 1))')
     w('')
 
-    w('# Tokenizador — devolve lista de (tipo, lexema)')
+    w('# LEXER')
+    w('')
+    w('import ply.lex as lex')
+    w('')
+    w('tokens = (')
+    for nome in patterns:
+        w(f"    '{nome}',")
+    for nome_ply in inline_tokens:
+        w(f"    '{nome_ply}',")
+    w(')')
+    w('')
+    # tokens declarados como funções (mais longos primeiro)
+    for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
+        w(f'def t_{nome}(t):')
+        w(f'    r"{pat}"')
+        w(f'    return t')
+        w('')
+    # tokens inline como strings (mais longos primeiro)
+    for nome_ply, inner in sorted(inline_tokens.items(), key=lambda x: -len(x[1])):
+        w(f't_{nome_ply} = r"{re.escape(inner)}"')
+    w('')
+    w('t_ignore = " \\t\\n"')
+    w('')
+    w('def t_error(t):')
+    w('    raise SyntaxError(f"Símbolo inválido: {t.value[0]}")')
+    w('')
+    w('lexer = lex.lex()')
+    w('')
+    # mapa nome PLY -> símbolo original, para devolver '[' em vez de 'LBRACK'
+    w('inline_map = {')
+    for nome_ply, inner in inline_tokens.items():
+        w(f'    "{nome_ply}": "{inner}",')
+    w('}')
     w('')
     w('def tokenizer(source):')
-    w('    tokens = []')
-    w('    while source:')
-
-    # terminais inline primeiro (mais longos primeiro), depois declarados
-    _inline = {t: t[1:-1] for t in all_terminals if _is_inline(t)}
-    branches = (
-        [(re.escape(inner), inner)          # tipo = o próprio carácter/símbolo
-         for _, inner in sorted(_inline.items(), key=lambda x: -len(x[1]))]
-        + [(pat, nm) for nm, pat in patterns.items()]   # tipo = nome declarado
-    )
-    for idx, (pat, tipo) in enumerate(branches):
-        kw = 'if' if idx == 0 else 'elif'
-        w(f'        {kw} m := re.match(r"{pat}", source):')
-        w(f'            tokens.append(({tipo}, m.group()))')
-        w(f'            source = source[m.end():]')
-
-    w('        elif source[0] in " \\n\\t":')
-    w('            source = source[1:]')
-    w('        else:')
-    w('            raise SyntaxError(f\'Símbolo inválido: "{source[0]}"\')')
-    w('    tokens.append(("$", "$"))')
-    w('    return tokens')
+    w('    lexer.input(source)')
+    w('    result = []')
+    w('    for token in lexer:')
+    w('        tipo = inline_map.get(token.type, token.type)')
+    w('        result.append((tipo, token.value))')
+    w('    result.append(("$", "$"))')
+    w('    return result')
     w('')
 
     w('')
@@ -163,13 +195,10 @@ def generate_rd_parser(grammar, first, follow):
             if not la:
                 continue
 
-            # lookahead usa o TIPO do token:
-            #   inline '+' → tipo é '+'
-            #   declarado ID → tipo é 'ID'
             def _tipo(t):
                 return _inline_inner(t) if _is_inline(t) else t
 
-            cond = ' or '.join(f'actual_tipo == {_tipo(t)}' for t in la)
+            cond = ' or '.join(f'actual_tipo == "{_tipo(t)}"' for t in la)
             kw = 'if' if first_branch else 'elif'
             first_branch = False
             w(f'    {kw} {cond}:')
@@ -179,26 +208,25 @@ def generate_rd_parser(grammar, first, follow):
                 if sym.get_is_terminal():
                     val  = sym.get_value()
                     tipo = _inline_inner(val) if _is_inline(val) else val
-                    w(f'        children.append(TreeNode({tipo}, lexema=rec({tipo})))')
+                    w(f'        children.append(TreeNode("{tipo}", lexema=rec("{tipo}")))')
                 else:
                     w(f'        children.append(parse_{_nt_func(sym.get_value())}())')
 
-            w(f'        return TreeNode({nt}, children=children)')
+            w(f'        return TreeNode("{nt}", children=children)')
 
         # ramo ε / erro
         if eps_seq is not None:
             if first_branch:
-                w(f'    return TreeNode({nt}, children=[TreeNode("ε")])')
+                w(f'    return TreeNode("{nt}", children=[TreeNode("ε")])')
             else:
                 w(f'    else:')
-                w(f'        return TreeNode({nt}, children=[TreeNode("ε")])')
+                w(f'        return TreeNode("{nt}", children=[TreeNode("ε")])')
         else:
             if first_branch:
                 w(f'    raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
             else:
                 w(f'    else:')
                 w(f'        raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
-
 
     w('')
     w('')

@@ -3,7 +3,7 @@ from gp_analysis import build_parse_table
 
 from gp_parser_rd import (
     _collect_terminals, _nt_func, _is_epsilon_seq,
-    _is_inline, _inline_inner,
+    _is_inline, _inline_inner, _inline_ply_name,
 )
 
 
@@ -16,9 +16,15 @@ def generate_table_parser(grammar, first, follow):
     table         = build_parse_table(grammar, first, follow)
     all_terminals = _collect_terminals(rules, patterns)
 
+    # tokens inline: '[' -> 'LBRACK', ':=' -> 'COLON_EQ', etc.
+    inline_tokens = {}
+    for t in all_terminals:
+        if _is_inline(t):
+            inner = _inline_inner(t)
+            inline_tokens[_inline_ply_name(inner)] = inner
+
     lines = []
     w = lines.append
-
 
     w('"""')
     w('Parser Top-Down Dirigido por Tabela — gerado pelo Grammar Playground.')
@@ -29,10 +35,8 @@ def generate_table_parser(grammar, first, follow):
     w('  actual_lex     — lexema do token actual')
     w('"""')
     w('')
-    w('import re')
     w('import sys')
     w('')
-
 
     w('# Árvore de derivação')
     w('')
@@ -51,33 +55,46 @@ def generate_table_parser(grammar, first, follow):
     w('            child.print_tree(prefix + ext, last=(i == len(self.children) - 1))')
     w('')
 
-    # ------------------------------------------------------------------
-    # Tokenizador — igual ao RD
-    # ------------------------------------------------------------------
-    w('# Tokenizador — devolve lista de (tipo, lexema)')
+    w('# LEXER')
+    w('')
+    w('import ply.lex as lex')
+    w('')
+    w('tokens = (')
+    for nome in patterns:
+        w(f"    '{nome}',")
+    for nome_ply in inline_tokens:
+        w(f"    '{nome_ply}',")
+    w(')')
+    w('')
+    # tokens declarados como funções (mais longos primeiro)
+    for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
+        w(f'def t_{nome}(t):')
+        w(f'    r"{pat}"')
+        w(f'    return t')
+        w('')
+    for nome_ply, inner in sorted(inline_tokens.items(), key=lambda x: -len(x[1])):
+        w(f't_{nome_ply} = r"{re.escape(inner)}"')
+    w('')
+    w('t_ignore = " \\t\\n"')
+    w('')
+    w('def t_error(t):')
+    w('    raise SyntaxError(f"Símbolo inválido: {t.value[0]}")')
+    w('')
+    w('lexer = lex.lex()')
+    w('')
+    w('inline_map = {')
+    for nome_ply, inner in inline_tokens.items():
+        w(f'    "{nome_ply}": "{inner}",')
+    w('}')
     w('')
     w('def tokenizer(source):')
-    w('    tokens = []')
-    w('    while source:')
-
-    _inline_map = {t: t[1:-1] for t in all_terminals if _is_inline(t)}
-    branches = (
-        [(re.escape(inner), inner)
-         for _, inner in sorted(_inline_map.items(), key=lambda x: -len(x[1]))]
-        + [(pat, nm) for nm, pat in patterns.items()]
-    )
-    for idx, (pat, tipo) in enumerate(branches):
-        kw = 'if' if idx == 0 else 'elif'
-        w(f'        {kw} m := re.match(r"{pat}", source):')
-        w(f'            tokens.append(({tipo!r}, m.group()))')
-        w(f'            source = source[m.end():]')
-
-    w('        elif source[0] in " \\n\\t":')
-    w('            source = source[1:]')
-    w('        else:')
-    w('            raise SyntaxError(f\'Símbolo inválido: "{source[0]}"\')')
-    w('    tokens.append(("$", "$"))')
-    w('    return tokens')
+    w('    lexer.input(source)')
+    w('    result = []')
+    w('    for token in lexer:')
+    w('        tipo = inline_map.get(token.type, token.type)')
+    w('        result.append((tipo, token.value))')
+    w('    result.append(("$", "$"))')
+    w('    return result')
     w('')
 
 
@@ -91,12 +108,11 @@ def generate_table_parser(grammar, first, follow):
         if not seqs:
             continue
         seq  = seqs[0]
-        # converter terminal da tabela para TIPO usado no tokenizador
         tipo = _inline_inner(terminal) if _is_inline(terminal) else terminal
         by_nt.setdefault(nt, {})[tipo] = seq
 
     for nt in sorted(by_nt):
-        w(f'    {nt!r}: {{')
+        w(f'    "{nt}": {{')
         for tipo in sorted(by_nt[nt]):
             seq = by_nt[nt][tipo]
             if _is_epsilon_seq(seq):
@@ -108,13 +124,13 @@ def generate_table_parser(grammar, first, follow):
                     for s in seq.symbols
                 ]
             rhs_comment = 'ε' if not rhs else ' '.join(rhs)
-            w(f'        {tipo!r}: {rhs!r},  # {nt} → {rhs_comment}')
+            w(f'        "{tipo}": {repr(rhs)},  # {nt} -> {rhs_comment}')
         w(f'    }},')
 
     w('}')
     w('')
-    w(f'NONTERMINALS = {sorted(nts)!r}')
-    w(f'START = {start!r}')
+    w(f'NONTERMINALS = {repr(sorted(nts))}')
+    w(f'START = "{start}"')
     w('')
 
     w('# Estado global')
@@ -151,7 +167,7 @@ def generate_table_parser(grammar, first, follow):
     w('            return raiz')
     w('')
     w('        if topo == "$":')
-    w("            raise SyntaxError(f\"Tokens extra: '{actual_tipo}' ('pat')\")")
+    w('            raise SyntaxError(f"Tokens extra: \'{actual_tipo}\' (\'{actual_lex}\')")')
     w('')
     w('        # AVANÇA — topo é terminal')
     w('        if topo not in NONTERMINALS:')
@@ -162,7 +178,7 @@ def generate_table_parser(grammar, first, follow):
     w('                advance()')
     w('            else:')
     w('                raise SyntaxError(')
-    w("                    f\"Esperado '{topo}', encontrado '{actual_tipo}' ('{actual_lex}')\"")
+    w('                    f"Esperado \'{topo}\', encontrado \'{actual_tipo}\' (\'{actual_lex}\')"')
     w('                )')
     w('            continue')
     w('')
@@ -171,13 +187,12 @@ def generate_table_parser(grammar, first, follow):
     w('        rhs = entradas.get(actual_tipo)')
     w('        if rhs is None:')
     w('            raise SyntaxError(')
-    w("                f\"Erro ao expandir '{topo}': '{actual_tipo}' inesperado. \"")
+    w('                f"Erro ao expandir \'{topo}\': \'{actual_tipo}\' inesperado. "')
     w('                f"Esperado um de: {list(entradas.keys())}"')
     w('            )')
     w('')
     w('        stack.pop()')
     w('        if not rhs:')
-    w('            # produção ε')
     w('            if topo_no is not None:')
     w('                topo_no.children.append(TreeNode("ε"))')
     w('        else:')
@@ -212,37 +227,24 @@ def generate_table_parser(grammar, first, follow):
 class Lexer:
     """Tokenizador parametrizado pelos padrões da gramática."""
 
-    def __init__(self, source, token_patterns, inline_terminals=None):
+    def __init__(self, source, token_patterns):
         self.tokens = []
-        pos = 0; line = 1
+        pos = 0
+        line = 1
         token_spec = list(token_patterns.items())
-        
-        inline_spec = []
-        if inline_terminals:
-            for val in sorted(inline_terminals, key=lambda x: -len(x)):
-                if val.startswith(("'", '"')):
-                    pat = val[1:-1]
-                    inline_spec.append((pat, re.escape(pat)))
         while pos < len(source):
             if re.match(r'[ \t]', source[pos]):
                 pos += 1; continue
             if source[pos] == '\n':
                 line += 1; pos += 1; continue
             matched = False
-            
-            for tipo, pat in inline_spec:
+            for name, pat in token_spec:
                 m = re.match(pat, source[pos:])
                 if m:
-                    self.tokens.append((tipo, m.group()))
+                    self.tokens.append((name, m.group()))
                     pos += m.end(); matched = True; break
             if not matched:
-                for name, pat in token_spec:
-                    m = re.match(pat, source[pos:])
-                    if m:
-                        self.tokens.append((name, m.group()))
-                        pos += m.end(); matched = True; break
-            if not matched:
-                raise SyntaxError(f"Linha {line}: carácter inesperado {source[pos]}")
+                raise SyntaxError(f"Linha {line}: carácter inesperado {source[pos]!r}")
         self.tokens.append(('$', '$'))
 
 
@@ -270,12 +272,8 @@ class TableParser:
     def __init__(self, grammar, table, source):
         self.nts   = grammar.get_nonterminals()
         self.start = grammar.get_start()
-        self.table = table   # {(NT, terminal): [SeqNode]}
-        
-        inline_terminals = [
-            t for t in grammar.get_terminals() if t.startswith(("'", '"'))
-        ]
-        lex = Lexer(source, grammar.get_token_patterns(), inline_terminals)
+        self.table = table
+        lex        = Lexer(source, grammar.get_token_patterns())
         self.tokens = lex.tokens
         self.pos    = 0
         self.steps  = []
@@ -292,11 +290,8 @@ class TableParser:
         )
 
     def _match_terminal(self, topo, la_tipo):
-        """Verifica se o topo da stack (terminal) corresponde ao tipo actual."""
-        # terminal inline na gramática: ex. "'+'" → compara com '+'
         if topo.startswith(("'", '"')):
             return la_tipo == topo[1:-1]
-        # terminal declarado: ex. 'ID' → compara directamente
         return la_tipo == topo
 
     def parse(self):
@@ -339,10 +334,8 @@ class TableParser:
                 continue
 
             # PRODUÇÃO — consultar tabela
-            # a tabela usa chaves como estão na gramática: 'ID', "'+'" etc.
             cell = self.table.get((topo, la_tipo), [])
             if not cell:
-                # tentar com terminal inline entre aspas
                 for q in ("'", '"'):
                     cell = self.table.get((topo, f"{q}{la_tipo}{q}"), [])
                     if cell:
@@ -352,33 +345,29 @@ class TableParser:
                 esperados = {t for (n, t) in self.table if n == topo}
                 raise SyntaxError(
                     f"Símbolo {la_tipo!r} inesperado ao expandir {topo!r}. "
-                    f"Esperado: {sorted(esperados)}"
+                    f"Esperado um de: {sorted(esperados)}"
                 )
 
             seq = cell[0]
-            stack.pop()
-            is_eps = self._is_eps(seq)
-            rhs_str = 'ε' if is_eps else ' '.join(s.get_value() for s in seq.symbols)
-            self.steps[-1]['action'] = f'produção: {topo} → {rhs_str}'
+            self.steps[-1]['action'] = f'produção: {topo} -> {repr(seq)}'
 
-            if is_eps:
+            stack.pop()
+            if self._is_eps(seq):
                 if topo_no is not None:
                     topo_no.children.append(_TreeNode('ε'))
             else:
-                filhos = [_TreeNode(s.get_value()) for s in seq.symbols]
+                syms  = seq.symbols
+                filhos = [_TreeNode(
+                    s.get_value()[1:-1] if s.get_value().startswith(("'", '"')) else s.get_value()
+                ) for s in syms]
                 if topo_no is not None:
                     topo_no.children.extend(filhos)
-                for sym, filho in reversed(list(zip(seq.symbols, filhos))):
-                    stack.append((sym.get_value(), filho))
+                for sym, filho in reversed(list(zip(syms, filhos))):
+                    val = sym.get_value()
+                    key = val[1:-1] if val.startswith(("'", '"')) else val
+                    stack.append((key, filho))
 
     def print_steps(self):
-        if not self.steps:
-            print("  (sem passos)")
-            return
-        ws = max(30, max(len(' '.join(s['stack'])) for s in self.steps) + 2)
-        wi = max(10,  max(len(s['input'])           for s in self.steps) + 2)
-        header = f"{'Passo':>5}  {'Stack':<{ws}}  {'Input':<{wi}}  Ação"
-        print(header)
-        print('─' * (len(header) + 10))
         for s in self.steps:
-            print(f'{s["step"]:>5}  {" ".join(s["stack"]):<{ws}}  {s["input"]:<{wi}}  {s["action"]}')
+            stack_str = ' '.join(s['stack'])
+            print(f"  {s['step']:3}  stack: {stack_str:<30}  input: {s['input']:<10}  {s['action']}")
