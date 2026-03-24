@@ -172,8 +172,16 @@ def generate():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
 
-    if check_ll1(grammar, first, follow):
-        return jsonify({'ok': False, 'errors': ['A gramática tem conflitos.']})
+    conflicts = check_ll1(grammar, first, follow)
+    if conflicts:
+        return jsonify({
+            'ok': False,
+            'has_conflicts': True,
+            'errors': [
+                f'A gramática tem {len(conflicts)} conflito(s) LL(1). '
+                f'Aplica as sugestões de correção antes de gerar os parsers.',
+            ],
+        })
 
     return jsonify({
         'ok': True,
@@ -269,8 +277,13 @@ def ser_conflicts(conflicts):
 
 def ser_suggestions(suggestions):
     return [
-        {'nonterminal': s['nonterminal'], 'technique': s['technique'],
-         'new_rules': s['new_rules']}
+        {
+            'nonterminal': s['nonterminal'],
+            'technique':   s['technique'],
+            'aplicavel':   s.get('aplicavel', True),
+            'message':     s.get('message', ''),
+            'new_rules':   s['new_rules'],
+        }
         for s in suggestions
     ]
 

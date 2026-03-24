@@ -82,8 +82,11 @@ def t_IDENTIFIER(t):
 
 
 def t_NEWLINE(t):
-    r'\n+'
-    t.lexer.lineno += len(t.value)
+    r'\n([ \t]*\n)*[ \t]*'
+    t.lexer.lineno += t.value.count('\n')
+    rest = t.lexer.lexdata[t.lexer.lexpos:]
+    if rest.lstrip(' \t').startswith('|'):
+        return None
     return t
 
 

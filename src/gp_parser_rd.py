@@ -104,12 +104,13 @@ def generate_rd_parser(grammar, first, follow):
     w('')
     w('import ply.lex as lex')
     w('')
-    w('tokens = (')
+    w('ply_tokens = (')
     for nome in patterns:
         w(f"    '{nome}',")
     for nome_ply in inline_tokens:
         w(f"    '{nome_ply}',")
     w(')')
+    w('tokens = ply_tokens')
     w('')
     # tokens declarados como funções (mais longos primeiro)
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
@@ -146,23 +147,25 @@ def generate_rd_parser(grammar, first, follow):
 
     w('')
     w('')
-    w('tokens     = []')
+    w('token_stream = [] ')
+    w('token_pos    = 0    # índice do token actual')
     w('actual_tipo = None   # tipo do token actual')
     w('actual_lex  = None   # lexema do token actual')
     w('')
     w('')
     w('def advance():')
-    w('    global actual_tipo, actual_lex')
-    w('    tokens.pop(0)')
-    w('    actual_tipo, actual_lex = tokens[0]')
+    w('    global token_pos, actual_tipo, actual_lex')
+    w('    if token_pos < len(token_stream) - 1:')
+    w('        token_pos += 1')
+    w('    actual_tipo, actual_lex = token_stream[token_pos]')
     w('')
     w('')
     w('def rec(t):')
     w('    """Consome o terminal de tipo t. Devolve o lexema. ABORTA se não coincidir."""')
     w('    if actual_tipo == t:')
-    w('        lex = actual_lex')
+    w('        lex_val = actual_lex')
     w('        advance()')
-    w('        return lex')
+    w('        return lex_val')
     w("    raise SyntaxError(f\"Esperado '{t}', encontrado '{actual_tipo}' ('{actual_lex}')\")")
     w('')
 
@@ -185,6 +188,7 @@ def generate_rd_parser(grammar, first, follow):
 
         first_branch = True
         eps_seq      = None
+        follow_tokens = sorted(follow.get(nt, set()))
 
         for seq in seqs:
             if _is_epsilon_seq(seq):
@@ -214,13 +218,20 @@ def generate_rd_parser(grammar, first, follow):
 
             w(f'        return TreeNode("{nt}", children=children)')
 
-        # ramo ε / erro
         if eps_seq is not None:
+            follow_cond = ' or '.join(
+                f'actual_tipo == "{_tipo(t)}"' for t in follow_tokens
+            ) if follow_tokens else 'True'
+
             if first_branch:
-                w(f'    return TreeNode("{nt}", children=[TreeNode("ε")])')
-            else:
-                w(f'    else:')
+                w(f'    if {follow_cond}:')
                 w(f'        return TreeNode("{nt}", children=[TreeNode("ε")])')
+                w(f'    raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
+            else:
+                w(f'    elif {follow_cond}:')
+                w(f'        return TreeNode("{nt}", children=[TreeNode("ε")])')
+                w(f'    else:')
+                w(f'        raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}} (esperado FOLLOW={{{repr(follow_tokens)}}})")')
         else:
             if first_branch:
                 w(f'    raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
@@ -231,9 +242,10 @@ def generate_rd_parser(grammar, first, follow):
     w('')
     w('')
     w('def parse(source):')
-    w('    global tokens, actual_tipo, actual_lex')
-    w('    tokens = tokenizer(source)')
-    w('    actual_tipo, actual_lex = tokens[0]')
+    w('    global token_stream, token_pos, actual_tipo, actual_lex')
+    w('    token_stream = tokenizer(source)')
+    w('    token_pos    = 0')
+    w('    actual_tipo, actual_lex = token_stream[0]')
     w(f'    tree = parse_{_nt_func(start)}()')
     w('    if actual_tipo != "$":')
     w('        raise SyntaxError(f"Tokens extra após o fim: {actual_tipo}")')

@@ -1,0 +1,9 @@
+start: Sexp
+
+Sexp   -> Exp '.'
+Exp    -> INT
+        | '(' Funcao ')'
+Funcao -> '+' Lista
+        | ’*’ Lista
+Lista  -> Lista Exp
+        | epsilon

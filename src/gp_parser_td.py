@@ -59,12 +59,13 @@ def generate_table_parser(grammar, first, follow):
     w('')
     w('import ply.lex as lex')
     w('')
-    w('tokens = (')
+    w('ply_tokens = (')
     for nome in patterns:
         w(f"    '{nome}',")
     for nome_ply in inline_tokens:
         w(f"    '{nome_ply}',")
     w(')')
+    w('tokens = ply_tokens')
     w('')
     # tokens declarados como funções (mais longos primeiro)
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
@@ -96,7 +97,6 @@ def generate_table_parser(grammar, first, follow):
     w('    result.append(("$", "$"))')
     w('    return result')
     w('')
-
 
     w('# Tabela LL(1) — parsing_table ')
     w('# parsing_table [NT][tipo] = lista de símbolos do lado direito ([] = ε)')
@@ -133,30 +133,29 @@ def generate_table_parser(grammar, first, follow):
     w(f'START = "{start}"')
     w('')
 
-    w('# Estado global')
-    w('')
-    w('tokens     = []')
+    w('token_stream = []')
+    w('token_pos    = 0    # índice do token actual')
     w('actual_tipo = None')
     w('actual_lex  = None')
     w('')
     w('')
     w('def advance():')
-    w('    global actual_tipo, actual_lex')
-    w('    tokens.pop(0)')
-    w('    actual_tipo, actual_lex = tokens[0]')
+    w('    global token_pos, actual_tipo, actual_lex')
+    w('    if token_pos < len(token_stream) - 1:')
+    w('        token_pos += 1')
+    w('    actual_tipo, actual_lex = token_stream[token_pos]')
     w('')
 
     w('# parse(source) — algoritmo Top-Down dirigido por tabela')
     w('')
     w('')
     w('def parse(source):')
-    w('    global tokens, actual_tipo, actual_lex')
-    w('    tokens = tokenizer(source)')
-    w('    actual_tipo, actual_lex = tokens[0]')
+    w('    global token_stream, token_pos, actual_tipo, actual_lex')
+    w('    token_stream = tokenizer(source)')
+    w('    token_pos    = 0')
+    w('    actual_tipo, actual_lex = token_stream[0]')
     w('')
-    w('    # nós da árvore indexados por símbolo na stack')
     w('    raiz = TreeNode(START)')
-    w('    # stack: lista de (símbolo: str, nó: TreeNode|None)')
     w('    stack = [("$", None), (START, raiz)]')
     w('')
     w('    while True:')
@@ -182,8 +181,8 @@ def generate_table_parser(grammar, first, follow):
     w('                )')
     w('            continue')
     w('')
-    w('        # PRODUÇÃO — consultar parsing_table ')
-    w('        entradas = parsing_table .get(topo, {})')
+    w('        # PRODUÇÃO — consultar parsing_table')
+    w('        entradas = parsing_table.get(topo, {})')
     w('        rhs = entradas.get(actual_tipo)')
     w('        if rhs is None:')
     w('            raise SyntaxError(')
@@ -248,7 +247,7 @@ class Lexer:
         self.tokens.append(('$', '$'))
 
 
-class _TreeNode:
+class TreeNode:
     """TreeNode interno usado pelo TableParser."""
     def __init__(self, label, children=None, lexema=None):
         self.label    = label
@@ -282,20 +281,23 @@ class TableParser:
         return self.tokens[self.pos]
 
     def advance(self):
-        self.pos += 1
+        # FIX 2: guarda contra avanço para além do fim do stream
+        if self.pos < len(self.tokens) - 1:
+            self.pos += 1
 
     def _is_eps(self, seq):
         return not seq.symbols or (
             len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
         )
 
-    def _match_terminal(self, topo, la_tipo):
-        if topo.startswith(("'", '"')):
-            return la_tipo == topo[1:-1]
-        return la_tipo == topo
+    def _normalize_terminal(self, val):
+        """Remove aspas de terminais inline para comparação uniforme."""
+        if val.startswith(("'", '"')):
+            return val[1:-1]
+        return val
 
     def parse(self):
-        raiz  = _TreeNode(self.start)
+        raiz  = TreeNode(self.start)
         stack = [('$', None), (self.start, raiz)]
         step  = 0
 
@@ -319,9 +321,9 @@ class TableParser:
             if topo == '$':
                 raise SyntaxError(f"Tokens extra: {la_tipo!r} ({la_lex!r})")
 
-            # AVANÇA — topo é terminal
             if topo not in self.nts:
-                if self._match_terminal(topo, la_tipo):
+                topo_norm = self._normalize_terminal(topo)
+                if la_tipo == topo_norm:
                     stack.pop()
                     if topo_no is not None:
                         topo_no.lexema = la_lex
@@ -333,16 +335,14 @@ class TableParser:
                     )
                 continue
 
-            # PRODUÇÃO — consultar tabela
             cell = self.table.get((topo, la_tipo), [])
             if not cell:
-                for q in ("'", '"'):
-                    cell = self.table.get((topo, f"{q}{la_tipo}{q}"), [])
-                    if cell:
-                        break
+                cell = self.table.get((topo, f"'{la_tipo}'"), [])
+            if not cell:
+                cell = self.table.get((topo, f'"{la_tipo}"'), [])
 
             if not cell:
-                esperados = {t for (n, t) in self.table if n == topo}
+                esperados = {self._normalize_terminal(t) for (n, t) in self.table if n == topo}
                 raise SyntaxError(
                     f"Símbolo {la_tipo!r} inesperado ao expandir {topo!r}. "
                     f"Esperado um de: {sorted(esperados)}"
@@ -354,17 +354,14 @@ class TableParser:
             stack.pop()
             if self._is_eps(seq):
                 if topo_no is not None:
-                    topo_no.children.append(_TreeNode('ε'))
+                    topo_no.children.append(TreeNode('ε'))
             else:
-                syms  = seq.symbols
-                filhos = [_TreeNode(
-                    s.get_value()[1:-1] if s.get_value().startswith(("'", '"')) else s.get_value()
-                ) for s in syms]
+                syms   = seq.symbols
+                filhos = [TreeNode(self._normalize_terminal(s.get_value())) for s in syms]
                 if topo_no is not None:
                     topo_no.children.extend(filhos)
                 for sym, filho in reversed(list(zip(syms, filhos))):
-                    val = sym.get_value()
-                    key = val[1:-1] if val.startswith(("'", '"')) else val
+                    key = self._normalize_terminal(sym.get_value())
                     stack.append((key, filho))
 
     def print_steps(self):

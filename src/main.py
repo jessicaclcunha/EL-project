@@ -50,7 +50,6 @@ def run_pipeline(source, test_phrases=None):
 
     grammar = parse_grammar(source)
 
-    # Mostrar avisos (se houver)
     warnings = get_parse_warnings()
     if warnings:
         print()
@@ -107,8 +106,8 @@ def run_pipeline(source, test_phrases=None):
         # ── Parser Recursivo Descendente ─────────────────────────────
         rd_code = generate_rd_parser(grammar, first, follow)
 
-        os.makedirs("src/generated_parsers", exist_ok=True)
-        rd_file = "src/generated_parsers/rd.py"
+        os.makedirs("generated_parsers", exist_ok=True)
+        rd_file = "generated_parsers/rd.py"
         with open(rd_file, "w", encoding="utf-8") as f:
             f.write(rd_code)
         print(f"✓ Parser recursivo descendente gerado → {rd_file}")
@@ -116,27 +115,11 @@ def run_pipeline(source, test_phrases=None):
         # ── Parser Dirigido por Tabela ────────────────────────────────
         td_code = generate_table_parser(grammar, first, follow)
 
-        td_file = "src/generated_parsers/td.py"
+        td_file = "generated_parsers/td.py"
         with open(td_file, "w", encoding="utf-8") as f:
             f.write(td_code)
         print(f"✓ Parser dirigido por tabela gerado   → {td_file}")
 
-        # ── Teste do Parser RD ────────────────────────────────────────
-        # if test_phrases:
-        #     sep("FASE 6 — Teste do parser recursivo descendente")
-        #     ns_rd = {}
-        #     exec(rd_code, ns_rd)
-        #     for phrase in test_phrases:
-        #         print(f"\nFrase: {phrase!r}")
-        #         try:
-        #             lex = ns_rd['Lexer'](phrase)
-        #             print(f"Tokens: {lex.tokens[:-1]}")
-        #             p = ns_rd['Parser'](lex.tokens)
-        #             tree = p.parse()
-        #             print("Árvore de derivação:")
-        #             tree.print_tree()
-        #         except SyntaxError as e:
-        #             print(f"  ✗ Erro: {e}")
 
         # ── Teste do Parser Dirigido por Tabela ───────────────────────
         # if test_phrases:

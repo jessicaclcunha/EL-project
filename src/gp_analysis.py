@@ -313,11 +313,20 @@ def left_factor(rule_name, sequences):
     return left_factor_recursive(rule_name, alt_lists, prime_counter)
 
 
-def _has_left_recursion(rule_name, sequences):
+def has_left_recursion(rule_name, sequences):
     return any(
         seq.symbols and seq.symbols[0].get_value() == rule_name
         for seq in sequences
     )
+
+
+def has_any_direct_left_recursion(grammar):
+    """Retorna True se qualquer regra tem recursividade à esquerda directa.
+    """
+    for rule in grammar.get_rules():
+        if has_left_recursion(rule.get_head_name(), rule.altlist.sequences):
+            return True
+    return False
 
 
 def eliminate_left_recursion(rule_name, sequences):
@@ -337,9 +346,19 @@ def eliminate_left_recursion(rule_name, sequences):
         return None
 
     prime = f"{rule_name}'"
-    base_alts = [f"{_seq_to_str(seq.symbols)} {prime}" for seq in nonrecursive]
-    rec_alts  = [f"{_seq_to_str(seq.symbols[1:])} {prime}" if seq.symbols[1:] else prime
-                 for seq in recursive]
+    base_alts = []
+    for seq in nonrecursive:
+        seq_str = _seq_to_str(seq.symbols)
+        if seq_str == 'ε' or not seq.symbols:
+            # β = ε  →  A -> A'  (não "ε A'")
+            base_alts.append(prime)
+        else:
+            base_alts.append(f"{seq_str} {prime}")
+
+    rec_alts = [
+        f"{_seq_to_str(seq.symbols[1:])} {prime}" if seq.symbols[1:] else prime
+        for seq in recursive
+    ]
     rec_alts.append('ε')
 
     return [
@@ -366,12 +385,14 @@ def suggest_fixes(grammar, conflicts):
         original = f"{A} -> {' | '.join(_seq_to_str(s.symbols) for s in seqs)}"
 
         # Tentar eliminar recursividade à esquerda
-        if _has_left_recursion(A, seqs):
+        if has_left_recursion(A, seqs):
             result = eliminate_left_recursion(A, seqs)
             suggestions.append({
                 'nonterminal': A,
                 'type': c['type'],
                 'technique': 'Eliminação de recursividade à esquerda',
+                'aplicavel': True,
+                'message': '',
                 'new_rules': result,
             })
             continue
@@ -392,6 +413,8 @@ def suggest_fixes(grammar, conflicts):
                     'nonterminal': A,
                     'type': c['type'],
                     'technique': 'Fatorização à esquerda',
+                    'aplicavel': True,
+                    'message': '',
                     'new_rules': new_rules,
                 })
             continue
@@ -402,10 +425,13 @@ def suggest_fixes(grammar, conflicts):
             'nonterminal': A,
             'type': c['type'],
             'technique': 'Sem correção automática possível',
-            'new_rules': [
-                f'⚠  Conflito FIRST/FOLLOW em {A}: a gramática pode ser intrinsecamente ambígua.',
-                f'   Verifica se as alternativas anuláveis e não-anuláveis partilham lookaheads.',
-            ],
+            'aplicavel': False,
+            'message': (
+                f'Conflito FIRST/FOLLOW em {A}: a gramática pode ser '
+                f'intrinsecamente ambígua. Verifica se as alternativas '
+                f'anuláveis e não-anuláveis partilham lookaheads.'
+            ),
+            'new_rules': [],
         })
 
     return suggestions
@@ -420,9 +446,12 @@ def print_suggestions(suggestions):
         print(f"  Não-terminal : {s['nonterminal']}")
         print(f"  Conflito     : {s['type']}")
         print(f"  Técnica      : {s['technique']}")
-        print(f"  Regras novas :")
-        for rule in s['new_rules']:
-            print(f"    {rule}")
+        if s.get('aplicavel', True):
+            print(f"  Regras novas :")
+            for rule in s.get('new_rules', []):
+                print(f"    {rule}")
+        else:
+            print(f"  ⚠  {s.get('message', 'Sem correção automática disponível.')}")
         print()
         
 
@@ -440,47 +469,14 @@ def check_llk(grammar, max_k=5):
 
     nts = grammar.get_nonterminals()
 
+    if has_any_direct_left_recursion(grammar):
+        return None, conflicts_1
+
     for k in range(2, max_k + 1):
         if is_llk(grammar, nts, k):
             return k, conflicts_1
 
     return None, conflicts_1   # não é LL(k) para nenhum k testado
-
-
-def first_k(symbols, token_patterns, k, nts, memo=None):
-    if memo is None:
-        memo = {}
-
-    if not symbols:
-        return {()}    # string vazia (epsilon)
-
-    sym = symbols[0]
-    rest = symbols[1:]
-
-    if sym.get_is_epsilon():
-        return {()}
-
-    if sym.get_is_terminal() or sym.get_value() not in nts:
-        # terminal: uma string de comprimento 1
-        token = sym.get_value()
-        # concatenar com FIRST_k do resto, truncando a k
-        rest_first = first_k(rest, token_patterns, k, nts, memo)
-        result = set()
-        for r in rest_first:
-            combined = (token,) + r
-            result.add(combined[:k])
-        return result
-
-    # não-terminal: expandir usando as regras
-    nt_name = sym.get_value()
-    key = (nt_name, k)
-    if key in memo:
-        return memo[key]
-
-    # evitar recursão infinita (recursividade à esquerda)
-    memo[key] = set()
-
-    return memo[key]   # retorna vazio se recursão detectada
 
 
 def is_llk(grammar, nts, k):

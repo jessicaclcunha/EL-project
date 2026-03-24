@@ -1,0 +1,31 @@
+start: Agenda
+
+Agenda -> DeclXML AAGENDA Lista FAGENDA
+
+DeclXML -> DCA ListaAtrib DCF
+
+ListaAtrib -> Atrib ListaAtrib| ε
+        
+Atrib -> ID '=' VATRIB
+
+Lista -> Elem Lista 
+        | ε
+
+Elem -> Entrada 
+        | Grupo
+
+Entrada -> AENTRADA ListaAtrib '>' Nome EntradaCont
+
+EntradaCont -> Telefone FENTRADA | Email Telefone FENTRADA
+
+Nome  -> ANOME STRING FNOME
+Email -> AEMAIL STRING FEMAIL
+Telefone -> ATELEFONE STRING FTELEFONE
+
+Grupo -> AGRUPO ListaAtrib '>' GLista FGRUPO
+
+GLista -> GElem GLista | ε
+       
+GElem -> Entrada | Grupo | Ref 
+
+Ref -> AREF ListaAtrib '/' '>'
