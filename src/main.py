@@ -1,9 +1,29 @@
+"""
+Grammar Playground — Pipeline principal
+
+Demonstra todas as funcionalidades implementadas:
+    1. Análise léxica e sintática → ASA (Árvore Sintática Abstrata)
+    2. Validação semântica (erros e avisos)
+    3. Conjuntos FIRST e FOLLOW
+    4. Verificação LL(1) e deteção de conflitos
+    5. Sugestões de correção (fatorização, eliminação de recursividade)
+    6. Tabela de parsing LL(1)
+    7. Geração dos parsers (recursivo descendente + dirigido por tabela)
+    8. Geração do Visitor para geração de código
+    9. Teste do visitor com frases de exemplo
+
+Uso:
+    python main.py                    # usa gramática de exemplo embutida
+    python main.py grammar.txt        # lê gramática de um ficheiro
+"""
+
 import sys
+import os
 from gp_parser import parse_grammar, get_parse_errors, get_parse_warnings
 from gp_analysis import *
 from gp_parser_rd import generate_rd_parser
 from gp_parser_td import TableParser, generate_table_parser
-import os
+from gp_visitor import generate_visitor
 
 YELLOW = "\033[93m"
 RESET  = "\033[0m"
@@ -120,51 +140,48 @@ def run_pipeline(source, test_phrases=None):
             f.write(td_code)
         print(f"✓ Parser dirigido por tabela gerado   → {td_file}")
 
+        # ── Visitor para geração de código ────────────────────────────
+        sep("FASE 6 — Visitor para geração de código")
 
-        # ── Teste do Parser Dirigido por Tabela ───────────────────────
-        # if test_phrases:
-        #     sep("FASE 7 — Teste do parser dirigido por tabela")
-        #     ns_td = {}
-        #     exec(td_code, ns_td)
-        #     for phrase in test_phrases:
-        #         print(f"\nFrase: {phrase!r}")
-        #         try:
-        #             lex = ns_td['Lexer'](phrase)
-        #             p = ns_td['Parser'](lex.tokens)
-        #             tree = p.parse()
-        #             print("Passos do parsing (stack):")
-        #             p.print_steps()
-        #             print("\nÁrvore de derivação:")
-        #             tree.print_tree()
-        #         except SyntaxError as e:
-        #             print(f"  ✗ Erro: {e}")
+        visitor_code = generate_visitor(grammar)
 
-        # # ── Comparação RD vs Tabela ───────────────────────────────────
-        # if test_phrases:
-        #     sep("FASE 8 — Comparação RD vs Tabela")
-        #     ns_rd2 = {}; exec(rd_code, ns_rd2)
-        #     ns_td2 = {}; exec(td_code, ns_td2)
+        visitor_file = "generated_parsers/visitor.py"
+        with open(visitor_file, "w", encoding="utf-8") as f:
+            f.write(visitor_code)
+        print(f"✓ Visitor gerado com sucesso          → {visitor_file}")
 
-        #     all_ok = True
-        #     for phrase in test_phrases:
-        #         try:
-        #             # RD
-        #             rd_lex = ns_rd2['Lexer'](phrase)
-        #             rd_p   = ns_rd2['Parser'](rd_lex.tokens)
-        #             rd_p.parse()
+        nts = grammar.get_nonterminals()
+        print(f"  Métodos visit_*: {len(nts)} ({', '.join(sorted(nts))})")
 
-        #             # Tabela
-        #             td_lex = ns_td2['Lexer'](phrase)
-        #             td_p   = ns_td2['Parser'](td_lex.tokens)
-        #             td_p.parse()
+        # Mostrar o código gerado
+        print(f"\n{'─' * 64}")
+        print(f" Código do Visitor ({visitor_file})")
+        print(f"{'─' * 64}\n")
+        print(visitor_code)
 
-        #             print(f"  ✓  {phrase!r}  — ambos aceitam")
-        #         except SyntaxError as e:
-        #             print(f"  ✗  {phrase!r}  — {e}")
-        #             all_ok = False
+        # ── Teste do Visitor com frases ───────────────────────────────
+        if test_phrases:
+            sep("FASE 7 — Teste do visitor")
 
-            # if all_ok:
-            #     print("\n✓ Ambos os parsers produzem resultados consistentes.")
+            # Executar o visitor gerado
+            vis_ns = {}
+            exec(visitor_code, vis_ns)
+            CodeGen = vis_ns['CodeGen']
+
+            for phrase in test_phrases:
+                print(f"\nFrase: {phrase!r}")
+                try:
+                    parser = TableParser(grammar, table, phrase)
+                    tree = parser.parse()
+
+                    visitor = CodeGen()
+                    result = visitor.visit(tree)
+
+                    print(f"  Árvore de derivação:")
+                    tree.print_tree()
+                    print(f"\n  Resultado do visitor: {result!r}")
+                except SyntaxError as e:
+                    print(f"  ✗ Erro: {e}")
 
     print()
 

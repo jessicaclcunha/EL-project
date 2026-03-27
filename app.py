@@ -10,6 +10,7 @@ from gp_parser   import parse_grammar, get_parse_errors, get_parse_warnings
 from gp_analysis import *
 from gp_parser_rd import generate_rd_parser
 from gp_parser_td import generate_table_parser, TableParser
+from gp_visitor   import generate_visitor
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
@@ -35,7 +36,7 @@ def analyse():
     conflicts   = check_ll1(grammar, first, follow)
     suggestions = suggest_fixes(grammar, conflicts)
     table       = build_parse_table(grammar, first, follow)
-     
+
     llk_result = None
     if conflicts:
         k, _ = check_llk(grammar, max_k=5)
@@ -64,7 +65,6 @@ def apply_suggestions():
     if grammar is None:
         return jsonify({'ok': False, 'errors': get_parse_errors()})
 
-    # Construir mapa NT → novas linhas de regra
     replacements = {}
     for s in suggestions:
         for rule_str in s.get('new_rules', []):
@@ -86,7 +86,6 @@ def rebuild_grammar(src, replacements):
     """
     lines = src.splitlines()
 
-    # --- Separar regras de tokens ---
     TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*\s*=\s*/")
     RULE_RE  = re.compile(r"^([A-Za-z][A-Za-z0-9_']*)\s*(->|→)")
 
@@ -103,7 +102,6 @@ def rebuild_grammar(src, replacements):
         else:
             rule_lines.append(line)
 
-    # --- Agrupar rule_lines em blocos por NT ---
     blocks = []
     i = 0
     while i < len(rule_lines):
@@ -114,7 +112,6 @@ def rebuild_grammar(src, replacements):
             nt          = m.group(1)
             block_lines = [line]
             i += 1
-            # absorver continuações (linhas com | ou indentadas)
             while i < len(rule_lines):
                 nxt_s = rule_lines[i].strip()
                 if nxt_s.startswith('|') or (rule_lines[i] and rule_lines[i][0] in (' ', '\t')):
@@ -127,19 +124,16 @@ def rebuild_grammar(src, replacements):
             blocks.append((None, [line]))
             i += 1
 
-    # --- 3Reconstruir blocos de regras ---
-    pending = dict(replacements)   # nt → [linhas]
+    pending = dict(replacements)
     inserted = set()
     out_rules = []
 
     for (nt, block_lines) in blocks:
         if nt is not None and nt in pending:
-            # Substituir este bloco pelas novas regras
             out_rules.extend(pending[nt])
             inserted.add(nt)
             del pending[nt]
 
-            # Inserir imediatamente os NTs novos introduzidos por este NT
             still_pending = list(pending.keys())
             for new_nt in still_pending:
                 if new_nt.startswith(nt):
@@ -187,6 +181,7 @@ def generate():
         'ok': True,
         'rd': generate_rd_parser(grammar, first, follow),
         'td': generate_table_parser(grammar, first, follow),
+        'visitor': generate_visitor(grammar),
     })
 
 
@@ -217,6 +212,50 @@ def parse_phrase():
     })
 
 
+@app.route('/api/run_visitor', methods=['POST'])
+def run_visitor():
+    """Executa o código do visitor personalizado sobre uma frase."""
+    body         = request.get_json()
+    src          = body.get('grammar', '')
+    phrase       = body.get('phrase', '')
+    visitor_code = body.get('visitor_code', '')
+
+    grammar = parse_grammar(src)
+    if grammar is None:
+        return jsonify({'ok': False, 'errors': get_parse_errors()})
+
+    first  = compute_first(grammar)
+    follow = compute_follow(grammar, first)
+    table  = build_parse_table(grammar, first, follow)
+
+    try:
+        parser = TableParser(grammar, table, phrase)
+        tree   = parser.parse()
+    except SyntaxError as e:
+        return jsonify({'ok': False, 'errors': [f'Erro ao analisar frase: {e}']})
+
+    ns = {}
+    try:
+        exec(visitor_code, ns)
+    except Exception as e:
+        return jsonify({'ok': False, 'errors': [f'Erro no código do visitor: {e}']})
+
+    CodeGen = ns.get('CodeGen')
+    if CodeGen is None:
+        return jsonify({'ok': False, 'errors': ['Classe CodeGen não encontrada no código.']})
+
+    try:
+        visitor = CodeGen()
+        result  = visitor.visit(tree)
+    except Exception as e:
+        return jsonify({'ok': False, 'errors': [f'Erro ao executar visitor: {e}']})
+
+    return jsonify({
+        'ok':       True,
+        'output':   str(result),
+        'tree_svg': tree_to_svg(tree),
+    })
+
 
 @app.route('/api/download/<ptype>', methods=['POST'])
 def download(ptype):
@@ -233,6 +272,8 @@ def download(ptype):
         code, name = generate_rd_parser(grammar, first, follow), 'rd.py'
     elif ptype == 'td':
         code, name = generate_table_parser(grammar, first, follow), 'td.py'
+    elif ptype == 'visitor':
+        code, name = generate_visitor(grammar), 'visitor.py'
     else:
         return jsonify({'ok': False, 'errors': ['Tipo inválido']}), 400
 
@@ -346,7 +387,7 @@ def tree_to_svg(root):
 
     R     = 20
     H_GAP = 68
-    V_GAP = 82    # mais espaço vertical para caber o valor abaixo
+    V_GAP = 82
     PAD   = 44
 
     W = max(int((max_x + 1) * H_GAP + PAD * 2), 200)
@@ -357,12 +398,9 @@ def tree_to_svg(root):
 
     BG      = '#ffffff'
     EDGE    = '#d1d5db'
-    # nó NT
     NT_F    = '#eef2ff'; NT_S = '#6366f1'; NT_T = '#3730a3'
-    # nó folha — anel verde, tipo em verde escuro, valor em laranja
     LF_F    = '#f0fdf4'; LF_S = '#16a34a'; LF_T = '#15803d'
-    LF_VAL  = '#c2410c'   # cor do valor (lexema)
-    # epsilon
+    LF_VAL  = '#c2410c'
     EPS_F   = '#f9fafb'; EPS_S = '#9ca3af'; EPS_T = '#6b7280'
 
     out = [
@@ -370,7 +408,6 @@ def tree_to_svg(root):
         f"style=\"background:{BG};font-family:'JetBrains Mono',monospace\">"
     ]
 
-    # arestas
     for s in all_slots:
         for c in s.children:
             out.append(
@@ -379,7 +416,6 @@ def tree_to_svg(root):
                 f'stroke="{EDGE}" stroke-width="1.5"/>'
             )
 
-    # nós
     for s in all_slots:
         x, y    = cx(s), cy(s)
         is_eps  = s.nt == 'ε'
@@ -397,7 +433,6 @@ def tree_to_svg(root):
             f'fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>'
         )
 
-        # label principal (tipo / NT) — dentro do círculo
         lbl = s.nt if len(s.nt) <= 8 else s.nt[:7] + '…'
         out.append(
             f'<text x="{x:.1f}" y="{y:.1f}" dy="0.35em" '
@@ -405,7 +440,6 @@ def tree_to_svg(root):
             f'{_esc(lbl)}</text>'
         )
 
-        # valor (lexema) — abaixo do círculo, outra cor
         if is_leaf and s.lexema is not None:
             val = s.lexema if len(s.lexema) <= 10 else s.lexema[:9] + '…'
             out.append(

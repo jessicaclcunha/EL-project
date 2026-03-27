@@ -1,6 +1,7 @@
 let ready    = false;
 let grammar  = '';
 let lastSugg = [];
+let visitorSkeleton = '';
 
 const EXAMPLE = `start: Program
 
@@ -31,7 +32,8 @@ function showTab(id) {
 function setLoading(btn, on) {
   if (!btn._lbl) btn._lbl = btn.innerHTML;
   btn.disabled  = on;
-  btn.innerHTML = on ? `<span class="spin"></span>${btn._lbl}` : btn._lbl;
+  btn.innerHTML = on ?
+    `<span class="spin"></span>${btn._lbl}` : btn._lbl;
 }
 
 function showBanners(id, items, type) {
@@ -57,6 +59,7 @@ function esc(s) {
 }
 
 
+// ── analisar ──────────────────────────────────────────────────────────
 $('btn-analyse').addEventListener('click', async () => {
   const btn = $('btn-analyse');
   const src = $('grammar').value.trim();
@@ -86,14 +89,12 @@ $('btn-analyse').addEventListener('click', async () => {
     if (warnings.length > 0) {
       showBanners('ff-banners', warnings, 'warn');
     }
- 
-    // Banner principal: OK ou conflito (em separado, abaixo dos avisos)
+
+    // Banner principal: OK ou conflito
     const $banners = $('ff-banners');
     if (d.conflicts.length === 0) {
-      // Gramática LL(1) sem conflitos → verde
       $banners.innerHTML += `<div class="banner ok"><span>✓</span><span>Gramática LL(1) válida — sem conflitos.</span></div>`;
     } else {
-      // Conflitos: mostrar quantos + resultado LL(k)
       let msg = `${d.conflicts.length} conflito(s) LL(1) detectado(s).`;
       if (d.llk !== null && d.llk !== undefined) {
         msg += `  A gramática <strong>É LL(${d.llk})</strong>.`;
@@ -112,7 +113,7 @@ $('btn-analyse').addEventListener('click', async () => {
         <td class="set">{ ${(d.follow[nt] || []).map(esc).join(', ') || '—'} }</td>
       </tr>`).join('');
 
-    // Lookahead — tabela separada na mesma página
+    // Lookahead
     $('la-tbody').innerHTML = d.lookahead.map(row => `
       <tr>
         <td class="nt">${esc(row.nt)}</td>
@@ -216,6 +217,15 @@ $('btn-generate').addEventListener('click', async () => {
     $('code-td').textContent = d.td;
     hljs.highlightElement($('code-rd'));
     hljs.highlightElement($('code-td'));
+
+    // Visitor
+    if (d.visitor) {
+      visitorSkeleton = d.visitor;
+      $('visitor-code').value = d.visitor;
+      $('visitor-empty').style.display  = 'none';
+      $('visitor-result').style.display = 'block';
+    }
+
     showTab('parsers');
   } finally {
     setLoading(btn, false);
@@ -295,6 +305,63 @@ async function runPhrase() {
 $('btn-phrase').addEventListener('click', runPhrase);
 $('phrase-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') runPhrase();
+});
+
+// ── visitor ───────────────────────────────────────────────────────────
+
+$('btn-reset-visitor').addEventListener('click', () => {
+  if (visitorSkeleton) $('visitor-code').value = visitorSkeleton;
+});
+
+$('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
+
+async function runVisitor() {
+  const btn          = $('btn-run-visitor');
+  const phrase       = $('visitor-phrase').value.trim();
+  const visitor_code = $('visitor-code').value;
+
+  $('visitor-banners').innerHTML = '';
+  $('visitor-output-wrap').style.display = 'none';
+
+  if (!ready) {
+    showBanners('visitor-banners',
+      ['Analisa a gramática primeiro (sem conflitos).'], 'warn');
+    return;
+  }
+  if (!phrase) {
+    showBanners('visitor-banners', ['Introduz uma frase para testar.'], 'warn');
+    return;
+  }
+
+  setLoading(btn, true);
+  try {
+    const d = await post('/api/run_visitor', { grammar, phrase, visitor_code });
+    if (!d.ok) {
+      showBanners('visitor-banners', d.errors, 'error');
+      return;
+    }
+    showBanners('visitor-banners', ['Visitor executado com sucesso.'], 'ok');
+    $('visitor-output-wrap').style.display = 'block';
+    $('visitor-output').textContent = d.output;
+    if (d.tree_svg) $('visitor-tree-svg').innerHTML = d.tree_svg;
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+$('btn-run-visitor').addEventListener('click', runVisitor);
+$('visitor-phrase').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runVisitor();
+});
+
+// Tab support no textarea do visitor
+$('visitor-code').addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target, s = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.substring(0, s) + '    ' + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = s + 4;
+  }
 });
 
 // ── tabs + exemplo ────────────────────────────────────────────────────
