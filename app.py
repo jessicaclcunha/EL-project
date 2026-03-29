@@ -198,9 +198,16 @@ def parse_phrase():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
+    
+    patterns = dict(grammar.get_token_patterns())
+    for t in grammar.get_terminals():
+        if t.startswith(("'", '"')):
+            inner = t[1:-1]
+            if inner not in patterns.values():
+                patterns[inner] = re.escape(inner)
 
     try:
-        parser = TableParser(grammar, table, phrase)
+        parser = TableParser(grammar, table, phrase, patterns)
         tree   = parser.parse()
     except SyntaxError as e:
         return jsonify({'ok': False, 'errors': [str(e)]})
@@ -227,9 +234,16 @@ def run_visitor():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
+    
+    patterns = dict(grammar.get_token_patterns())
+    for t in grammar.get_terminals():
+        if t.startswith(("'", '"')):
+            inner = t[1:-1]
+            if inner not in patterns.values():
+                patterns[inner] = re.escape(inner)
 
     try:
-        parser = TableParser(grammar, table, phrase)
+        parser = TableParser(grammar, table, phrase, patterns)
         tree   = parser.parse()
     except SyntaxError as e:
         return jsonify({'ok': False, 'errors': [f'Erro ao analisar frase: {e}']})

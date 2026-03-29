@@ -90,7 +90,6 @@ $('btn-analyse').addEventListener('click', async () => {
       showBanners('ff-banners', warnings, 'warn');
     }
 
-    // Banner principal: OK ou conflito
     const $banners = $('ff-banners');
     if (d.conflicts.length === 0) {
       $banners.innerHTML += `<div class="banner ok"><span>✓</span><span>Gramática LL(1) válida — sem conflitos.</span></div>`;
@@ -164,6 +163,7 @@ $('btn-analyse').addEventListener('click', async () => {
   }
 });
 
+
 // ── aplicar sugestões ─────────────────────────────────────────────────
 $('btn-apply').addEventListener('click', async () => {
   const btn = $('btn-apply');
@@ -180,6 +180,7 @@ $('btn-apply').addEventListener('click', async () => {
     setLoading(btn, false);
   }
 });
+
 
 // ── tabela LL(1) ──────────────────────────────────────────────────────
 function buildTable({ terminals, rows }) {
@@ -203,6 +204,7 @@ function buildTable({ terminals, rows }) {
   $('ll-table').innerHTML = html + '</tbody>';
 }
 
+
 // ── gerar parsers ─────────────────────────────────────────────────────
 $('btn-generate').addEventListener('click', async () => {
   const btn = $('btn-generate');
@@ -211,6 +213,7 @@ $('btn-generate').addEventListener('click', async () => {
     const d = await post('/api/generate', { grammar });
     if (!d.ok) { alert(d.errors.join('\n')); return; }
 
+    // parsers rd / td
     $('parsers-empty').style.display  = 'none';
     $('parsers-result').style.display = 'block';
     $('code-rd').textContent = d.rd;
@@ -218,7 +221,7 @@ $('btn-generate').addEventListener('click', async () => {
     hljs.highlightElement($('code-rd'));
     hljs.highlightElement($('code-td'));
 
-    // Visitor
+    // visitor — aparece na sub-aba do painel "Testar frase"
     if (d.visitor) {
       visitorSkeleton = d.visitor;
       $('visitor-code').value = d.visitor;
@@ -232,7 +235,8 @@ $('btn-generate').addEventListener('click', async () => {
   }
 });
 
-// selector rd / td
+
+// ── selector rd / td ──────────────────────────────────────────────────
 document.querySelectorAll('.ps-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('active'));
@@ -254,15 +258,36 @@ async function dlParser(type) {
   a.download = `${type}.py`;
   a.click();
 }
+
 $('btn-dl-rd').addEventListener('click', () => dlParser('rd'));
 $('btn-dl-td').addEventListener('click', () => dlParser('td'));
 
-// ── testar frase ──────────────────────────────────────────────────────
+
+// ── Sub-abas internas (Parsing / Visitor) ─────────────────────────────
+document.querySelectorAll('.sub-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.sub;
+
+    document.querySelectorAll('.sub-tab').forEach(b => {
+      const active = b.dataset.sub === target;
+      b.style.color             = active ? 'var(--indigo)' : 'var(--muted)';
+      b.style.borderBottomColor = active ? 'var(--indigo)' : 'transparent';
+    });
+
+    document.querySelectorAll('.sub-pane').forEach(p => {
+      p.style.display = p.id === `sub-${target}` ? 'block' : 'none';
+    });
+  });
+});
+
+
+// ── Testar frase (sub-aba Parsing) ────────────────────────────────────
 async function runPhrase() {
   const btn    = $('btn-phrase');
   const phrase = $('phrase-input').value.trim();
   $('phrase-banners').innerHTML = '';
   $('phrase-result').style.display = 'none';
+  $('phrase-empty').style.display  = 'flex';
 
   if (!ready) {
     showBanners('phrase-banners',
@@ -281,13 +306,14 @@ async function runPhrase() {
     }
 
     showBanners('phrase-banners', ['Frase reconhecida com sucesso.'], 'ok');
+    $('phrase-empty').style.display  = 'none';
     $('phrase-result').style.display = 'block';
 
     $('tree-svg-wrap').innerHTML = d.tree_svg;
 
     $('steps-tbody').innerHTML = d.steps.map(s => {
-      const cls = s.action === 'ACEITE'            ? 's-ok'
-                : s.action.startsWith('produção')   ? 's-prod'
+      const cls = s.action === 'ACEITE'           ? 's-ok'
+                : s.action.startsWith('produção')  ? 's-prod'
                 : 's-adv';
       return `<tr>
         <td>${s.step}</td>
@@ -304,20 +330,19 @@ async function runPhrase() {
 
 $('btn-phrase').addEventListener('click', runPhrase);
 $('phrase-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') runPhrase();
+  if (e.key !== 'Enter') return;
+  // se a sub-aba activa for visitor, executa o visitor; senão o parsing
+  const activeSubTab = document.querySelector('.sub-tab[data-sub="visitor"]');
+  const visitorActive = activeSubTab &&
+    activeSubTab.style.borderBottomColor === 'var(--indigo)';
+  if (visitorActive) runVisitor(); else runPhrase();
 });
 
-// ── visitor ───────────────────────────────────────────────────────────
 
-$('btn-reset-visitor').addEventListener('click', () => {
-  if (visitorSkeleton) $('visitor-code').value = visitorSkeleton;
-});
-
-$('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
-
+// ── Visitor (sub-aba Visitor) ─────────────────────────────────────────
 async function runVisitor() {
   const btn          = $('btn-run-visitor');
-  const phrase       = $('visitor-phrase').value.trim();
+  const phrase       = $('phrase-input').value.trim();  // mesma frase!
   const visitor_code = $('visitor-code').value;
 
   $('visitor-banners').innerHTML = '';
@@ -329,7 +354,8 @@ async function runVisitor() {
     return;
   }
   if (!phrase) {
-    showBanners('visitor-banners', ['Introduz uma frase para testar.'], 'warn');
+    showBanners('visitor-banners',
+      ['Introduz uma frase no campo acima.'], 'warn');
     return;
   }
 
@@ -343,18 +369,23 @@ async function runVisitor() {
     showBanners('visitor-banners', ['Visitor executado com sucesso.'], 'ok');
     $('visitor-output-wrap').style.display = 'block';
     $('visitor-output').textContent = d.output;
-    if (d.tree_svg) $('visitor-tree-svg').innerHTML = d.tree_svg;
   } finally {
     setLoading(btn, false);
   }
 }
 
 $('btn-run-visitor').addEventListener('click', runVisitor);
-$('visitor-phrase').addEventListener('keydown', e => {
-  if (e.key === 'Enter') runVisitor();
+
+
+// ── Repor esqueleto + download ────────────────────────────────────────
+$('btn-reset-visitor').addEventListener('click', () => {
+  if (visitorSkeleton) $('visitor-code').value = visitorSkeleton;
 });
 
-// Tab support no textarea do visitor
+$('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
+
+
+// ── Tab no textarea do visitor ────────────────────────────────────────
 $('visitor-code').addEventListener('keydown', e => {
   if (e.key === 'Tab') {
     e.preventDefault();
@@ -364,7 +395,8 @@ $('visitor-code').addEventListener('keydown', e => {
   }
 });
 
-// ── tabs + exemplo ────────────────────────────────────────────────────
+
+// ── Tabs principais + exemplo ─────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(t =>
   t.addEventListener('click', () => showTab(t.dataset.tab)));
 

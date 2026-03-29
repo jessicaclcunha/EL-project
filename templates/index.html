@@ -78,7 +78,6 @@
         </div>
         <div class="tab" data-tab="table">Tabela LL(1)</div>
         <div class="tab" data-tab="parsers">Parsers</div>
-        <div class="tab" data-tab="visitor">Visitor</div>
         <div class="tab" data-tab="phrase">Testar frase</div>
       </div>
 
@@ -211,87 +210,140 @@
         </div>
       </div>
 
-      <!-- Testar frase -->
+      <!-- Painel unificado: Testar frase + Visitor -->
       <div class="panel" id="panel-phrase">
-        <div class="phrase-row">
+
+        <!-- input da frase — partilhado pelas duas sub-abas -->
+        <div class="phrase-row" style="margin-bottom:14px">
           <input type="text" id="phrase-input" placeholder="ex: x := a + 3">
-          <button class="btn-green" id="btn-phrase">Analisar</button>
+          <button class="btn-green" id="btn-phrase">▶ Analisar</button>
         </div>
         <div class="banners" id="phrase-banners"></div>
-        <div id="phrase-result" style="display:none">
-          <div class="section">
-            <div class="sec-title">Árvore de derivação</div>
-            <div class="tree-svg-wrap" id="tree-svg-wrap"></div>
+
+        <!-- sub-abas -->
+        <div style="display:flex;gap:0;border-bottom:1px solid var(--border);
+                    margin-bottom:18px;margin-top:4px">
+          <button class="sub-tab active" data-sub="parsing"
+                  style="padding:0 18px;height:34px;font-size:12px;font-weight:600;
+                         background:none;border:none;border-bottom:2px solid var(--indigo);
+                         color:var(--indigo);cursor:pointer;letter-spacing:.2px">
+            Parsing
+          </button>
+          <button class="sub-tab" data-sub="visitor"
+                  style="padding:0 18px;height:34px;font-size:12px;font-weight:600;
+                         background:none;border:none;border-bottom:2px solid transparent;
+                         color:var(--muted);cursor:pointer;letter-spacing:.2px">
+            Visitor
+          </button>
+        </div>
+
+        <!-- ── sub-aba: Parsing ──────────────────────────────── -->
+        <div class="sub-pane active" id="sub-parsing">
+          <div id="phrase-empty" class="empty">
+            <svg width="28" height="28" fill="none" stroke="currentColor"
+                 stroke-width="1.5" viewBox="0 0 24 24">
+              <path d="M9 17H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 0
+                       2-2v0a2 2 0 0 0-2-2h-4M9 17V5a2 2 0 0 1 2-2h2a2 2 0
+                       0 1 2 2v12M9 17h6"/>
+            </svg>
+            <p>Introduz uma frase e clica em <strong>▶ Analisar</strong>.</p>
           </div>
-          <div class="section">
-            <div class="sec-title">Passos do parsing</div>
-            <div class="tbl-wrap">
-              <table>
-                <thead>
-                  <tr><th>#</th><th>Stack</th><th>Input</th><th>Ação</th></tr>
-                </thead>
-                <tbody id="steps-tbody"></tbody>
-              </table>
+
+          <div id="phrase-result" style="display:none">
+            <div class="section">
+              <div class="sec-title">Árvore de derivação</div>
+              <div class="tree-svg-wrap" id="tree-svg-wrap"></div>
+            </div>
+            <div class="section">
+              <div class="sec-title">Passos do parsing</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr><th>#</th><th>Stack</th><th>Input</th><th>Ação</th></tr>
+                  </thead>
+                  <tbody id="steps-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── sub-aba: Visitor ──────────────────────────────── -->
+        <div class="sub-pane" id="sub-visitor" style="display:none">
+
+          <div id="visitor-empty" class="empty">
+            <svg width="28" height="28" fill="none" stroke="currentColor"
+                 stroke-width="1.5" viewBox="0 0 24 24">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4
+                       0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12
+                       0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            <p>Clica em <strong>Gerar parsers</strong> primeiro para obter o esqueleto do visitor.</p>
+          </div>
+
+          <div id="visitor-result" style="display:none">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+              <!-- coluna esquerda: editor -->
+              <div>
+                <div class="code-header" style="margin-bottom:8px">
+                  <span class="sec-title" style="margin:0">Código do Visitor</span>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn-outline" id="btn-reset-visitor"
+                            style="height:26px;font-size:12px" title="Repor esqueleto original">
+                      ↺ repor
+                    </button>
+                    <button class="btn-outline" id="btn-dl-visitor"
+                            style="height:26px;font-size:12px">↓ .py</button>
+                  </div>
+                </div>
+                <textarea id="visitor-code" spellcheck="false"
+                  style="width:100%;height:400px;font-family:var(--mono);font-size:12px;
+                         line-height:1.6;tab-size:4;padding:12px;
+                         border:1px solid var(--border);border-radius:var(--r);
+                         background:var(--panel);resize:vertical"></textarea>
+              </div>
+
+              <!-- coluna direita: resultado + explicação -->
+              <div style="display:flex;flex-direction:column;gap:14px">
+
+                <!-- botão executar aqui também -->
+                <button class="btn-green" id="btn-run-visitor"
+                        style="align-self:flex-start">
+                  ▶ Executar visitor
+                </button>
+
+                <div class="banners" id="visitor-banners"></div>
+
+                <div id="visitor-output-wrap" style="display:none">
+                  <div style="background:var(--indigo-l);border:2px solid var(--indigo-b);
+                              border-radius:var(--r);padding:14px 16px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;
+                                letter-spacing:.5px;color:var(--indigo);margin-bottom:8px">
+                      Resultado do Visitor
+                    </div>
+                    <pre id="visitor-output"
+                         style="font-family:var(--mono);font-size:15px;font-weight:600;
+                                color:var(--indigo);white-space:pre-wrap;margin:0;
+                                word-break:break-all"></pre>
+                  </div>
+                </div>
+
+                <div style="background:var(--surface);border:1px solid var(--border);
+                            border-radius:var(--r);padding:12px 14px;font-size:13px;
+                            color:var(--muted);line-height:1.7">
+                  <p style="font-weight:600;color:var(--text);margin-bottom:4px">Como funciona</p>
+                  O parser analisa a frase (aba <strong>Parsing</strong>) e constrói a árvore.
+                  O Visitor percorre essa árvore chamando <code style="font-family:var(--mono);
+                  font-size:12px">visit_NT(node)</code> em cada nó — o resultado é o que o teu
+                  código devolver. Podes avaliar expressões, gerar código, construir ASTs, etc.
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Visitor -->
-      <div class="panel" id="panel-visitor">
-        <div id="visitor-empty" class="empty">
-          <svg width="28" height="28" fill="none" stroke="currentColor"
-               stroke-width="1.5" viewBox="0 0 24 24">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-          <p>Clica em <strong>Gerar parsers</strong> após análise sem conflitos.</p>
-        </div>
-
-        <div id="visitor-result" style="display:none">
-          <div class="code-header">
-            <span class="sec-title" style="margin:0">Visitor — Geração de código</span>
-            <div style="display:flex;gap:6px">
-              <button class="btn-outline" id="btn-dl-visitor"
-                      style="height:26px;font-size:12px">↓ descarregar visitor.py</button>
-              <button class="btn-outline" id="btn-reset-visitor"
-                      style="height:26px;font-size:12px">↺ repor esqueleto</button>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="sec-title" style="font-size:11px;color:var(--muted)">
-              Personaliza os métodos visit_&lt;NT&gt; e testa com uma frase
-            </div>
-            <textarea id="visitor-code" spellcheck="false"
-              style="width:100%;min-height:360px;font-family:var(--mono);font-size:12px;
-                     line-height:1.6;tab-size:4;padding:12px;border:1px solid var(--border);
-                     border-radius:var(--r);background:var(--panel);resize:vertical"></textarea>
-          </div>
-
-          <div class="section" style="margin-top:12px">
-            <div class="sec-title">Testar visitor</div>
-            <div style="display:flex;gap:8px;margin-bottom:10px">
-              <input type="text" id="visitor-phrase" placeholder="ex: x := a + 3"
-                     style="flex:1">
-              <button class="btn-green" id="btn-run-visitor">Executar</button>
-            </div>
-            <div class="banners" id="visitor-banners"></div>
-            <div id="visitor-output-wrap" style="display:none">
-              <div style="margin-bottom:12px">
-                <div class="sec-title" style="font-size:11px;margin-bottom:4px">Resultado</div>
-                <pre id="visitor-output"
-                     style="background:var(--surface);border:1px solid var(--border);
-                            border-radius:var(--r);padding:10px 14px;font-family:var(--mono);
-                            font-size:13px;line-height:1.5;color:var(--green);
-                            white-space:pre-wrap;margin:0"></pre>
-              </div>
-              <div>
-                <div class="sec-title" style="font-size:11px;margin-bottom:4px">Árvore de derivação</div>
-                <div class="tree-svg-wrap" id="visitor-tree-svg"></div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>

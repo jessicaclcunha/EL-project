@@ -74,7 +74,10 @@ def generate_table_parser(grammar, first, follow):
         w(f'    return t')
         w('')
     for nome_ply, inner in sorted(inline_tokens.items(), key=lambda x: -len(x[1])):
-        w(f't_{nome_ply} = r"{re.escape(inner)}"')
+        w(f'def t_{nome_ply}(t):')
+        w(f'    r"{re.escape(inner)}"')
+        w(f'    return t')
+        w('')
     w('')
     w('t_ignore = " \\t\\n"')
     w('')
@@ -268,11 +271,16 @@ class TableParser:
     Parser LL(1)
     """
 
-    def __init__(self, grammar, table, source):
+    def __init__(self, grammar, table, source, extra_patterns=None):
         self.nts   = grammar.get_nonterminals()
         self.start = grammar.get_start()
         self.table = table
-        lex        = Lexer(source, grammar.get_token_patterns())
+        
+        patterns = dict(grammar.get_token_patterns())
+        if extra_patterns:
+            patterns.update(extra_patterns)
+            
+        lex = Lexer(source, patterns)
         self.tokens = lex.tokens
         self.pos    = 0
         self.steps  = []
