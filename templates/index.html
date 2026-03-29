@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+
   <style>
     /* selector de parser (rd / td) */
     .parser-selector {
@@ -41,6 +44,21 @@
     }
     .parser-pane { display: none; }
     .parser-pane.active { display: block; }
+
+    /* ── CodeMirror — editor do visitor ── */
+    .cm-editor-wrap {
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+    .CodeMirror {
+      height: 400px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+    /* anula o fundo branco padrão do CM quando o tema é escuro */
+    .CodeMirror-scroll { background: transparent; }
   </style>
 </head>
 <body>
@@ -94,7 +112,6 @@
         <div id="ff-result" style="display:none">
           <div class="banners" id="ff-banners"></div>
 
-          <!-- FIRST e FOLLOW -->
           <div class="section">
             <div class="sec-title">FIRST e FOLLOW</div>
             <table>
@@ -105,7 +122,6 @@
             </table>
           </div>
 
-          <!-- Lookahead -->
           <div class="section">
             <div class="sec-title">Lookahead por produção</div>
             <table>
@@ -184,7 +200,6 @@
           <p>Clica em <strong>Gerar parsers</strong> após análise sem conflitos.</p>
         </div>
         <div id="parsers-result" style="display:none">
-          <!-- selector rd / td -->
           <div class="parser-selector">
             <button class="ps-btn active" data-parser="rd">rd.py — Recursivo Descendente</button>
             <button class="ps-btn"        data-parser="td">td.py — Top Down</button>
@@ -213,7 +228,6 @@
       <!-- Painel unificado: Testar frase + Visitor -->
       <div class="panel" id="panel-phrase">
 
-        <!-- input da frase — partilhado pelas duas sub-abas -->
         <div class="phrase-row" style="margin-bottom:14px">
           <input type="text" id="phrase-input" placeholder="ex: x := a + 3">
           <button class="btn-green" id="btn-phrase">▶ Analisar</button>
@@ -223,22 +237,20 @@
         <!-- sub-abas -->
         <div style="display:flex;gap:0;border-bottom:1px solid var(--border);
                     margin-bottom:18px;margin-top:4px">
-          <button class="sub-tab active" data-sub="parsing"
+          <button class="sub-tab" data-sub="parsing"
                   style="padding:0 18px;height:34px;font-size:12px;font-weight:600;
-                         background:none;border:none;border-bottom:2px solid var(--indigo);
-                         color:var(--indigo);cursor:pointer;letter-spacing:.2px">
+                         background:none;border:none;cursor:pointer;letter-spacing:.2px">
             Parsing
           </button>
           <button class="sub-tab" data-sub="visitor"
                   style="padding:0 18px;height:34px;font-size:12px;font-weight:600;
-                         background:none;border:none;border-bottom:2px solid transparent;
-                         color:var(--muted);cursor:pointer;letter-spacing:.2px">
+                         background:none;border:none;cursor:pointer;letter-spacing:.2px">
             Visitor
           </button>
         </div>
 
         <!-- ── sub-aba: Parsing ──────────────────────────────── -->
-        <div class="sub-pane active" id="sub-parsing">
+        <div class="sub-pane" id="sub-parsing">
           <div id="phrase-empty" class="empty">
             <svg width="28" height="28" fill="none" stroke="currentColor"
                  stroke-width="1.5" viewBox="0 0 24 24">
@@ -285,7 +297,6 @@
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 
-              <!-- coluna esquerda: editor -->
               <div>
                 <div class="code-header" style="margin-bottom:8px">
                   <span class="sec-title" style="margin:0">Código do Visitor</span>
@@ -298,17 +309,14 @@
                             style="height:26px;font-size:12px">↓ .py</button>
                   </div>
                 </div>
-                <textarea id="visitor-code" spellcheck="false"
-                  style="width:100%;height:400px;font-family:var(--mono);font-size:12px;
-                         line-height:1.6;tab-size:4;padding:12px;
-                         border:1px solid var(--border);border-radius:var(--r);
-                         background:var(--panel);resize:vertical"></textarea>
+                <div class="cm-editor-wrap">
+                  <textarea id="visitor-code"></textarea>
+                </div>
               </div>
 
               <!-- coluna direita: resultado + explicação -->
               <div style="display:flex;flex-direction:column;gap:14px">
 
-                <!-- botão executar aqui também -->
                 <button class="btn-green" id="btn-run-visitor"
                         style="align-self:flex-start">
                   ▶ Executar visitor
@@ -344,11 +352,12 @@
           </div>
         </div>
       </div>
-      </div>
 
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

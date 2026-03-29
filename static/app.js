@@ -3,6 +3,9 @@ let grammar  = '';
 let lastSugg = [];
 let visitorSkeleton = '';
 
+// Instância global do editor CodeMirror (iniciada após o DOM estar pronto)
+let visitorEditor = null;
+
 const EXAMPLE = `start: Program
 
 Program   -> StmtList
@@ -21,6 +24,41 @@ ASSIGN = /:=/`;
 
 
 const $ = id => document.getElementById(id);
+
+// ── inicializar CodeMirror ────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const ta = $('visitor-code');
+  if (!ta || typeof CodeMirror === 'undefined') return;
+
+  visitorEditor = CodeMirror.fromTextArea(ta, {
+    mode:           'python',
+    theme:          'dracula',
+    lineNumbers:    true,
+    indentUnit:     4,
+    tabSize:        4,
+    indentWithTabs: false,
+    lineWrapping:   false,
+    autofocus:      false,
+    extraKeys: {
+      Tab:         cm => cm.execCommand('indentMore'),
+      'Shift-Tab': cm => cm.execCommand('indentLess'),
+    },
+  });
+  visitorEditor.setSize('100%', '400px');
+});
+
+// Helpers para ler/escrever no editor (com fallback para textarea simples)
+function getVisitorCode() {
+  return visitorEditor ? visitorEditor.getValue() : $('visitor-code').value;
+}
+function setVisitorCode(code) {
+  if (visitorEditor) {
+    visitorEditor.setValue(code);
+  } else {
+    $('visitor-code').value = code;
+  }
+}
+
 
 function showTab(id) {
   document.querySelectorAll('.tab').forEach(t =>
@@ -84,11 +122,8 @@ $('btn-analyse').addEventListener('click', async () => {
       return;
     }
 
-    // banners
     const warnings = d.warnings || [];
-    if (warnings.length > 0) {
-      showBanners('ff-banners', warnings, 'warn');
-    }
+    if (warnings.length > 0) showBanners('ff-banners', warnings, 'warn');
 
     const $banners = $('ff-banners');
     if (d.conflicts.length === 0) {
@@ -103,7 +138,6 @@ $('btn-analyse').addEventListener('click', async () => {
       $banners.innerHTML += `<div class="banner warn"><span>⚠</span><span>${msg}</span></div>`;
     }
 
-    // FIRST / FOLLOW
     const nts = Object.keys(d.first).sort();
     $('ff-tbody').innerHTML = nts.map(nt => `
       <tr>
@@ -112,7 +146,6 @@ $('btn-analyse').addEventListener('click', async () => {
         <td class="set">{ ${(d.follow[nt] || []).map(esc).join(', ') || '—'} }</td>
       </tr>`).join('');
 
-    // Lookahead
     $('la-tbody').innerHTML = d.lookahead.map(row => `
       <tr>
         <td class="nt">${esc(row.nt)}</td>
@@ -121,7 +154,6 @@ $('btn-analyse').addEventListener('click', async () => {
         <td class="nullable">${row.nullable ? 'sim' : ''}</td>
       </tr>`).join('');
 
-    // conflitos
     const badge = $('badge');
     if (d.conflicts.length > 0) {
       badge.style.display = 'inline';
@@ -213,7 +245,6 @@ $('btn-generate').addEventListener('click', async () => {
     const d = await post('/api/generate', { grammar });
     if (!d.ok) { alert(d.errors.join('\n')); return; }
 
-    // parsers rd / td
     $('parsers-empty').style.display  = 'none';
     $('parsers-result').style.display = 'block';
     $('code-rd').textContent = d.rd;
@@ -221,10 +252,11 @@ $('btn-generate').addEventListener('click', async () => {
     hljs.highlightElement($('code-rd'));
     hljs.highlightElement($('code-td'));
 
-    // visitor — aparece na sub-aba do painel "Testar frase"
     if (d.visitor) {
       visitorSkeleton = d.visitor;
-      $('visitor-code').value = d.visitor;
+      setVisitorCode(d.visitor);
+      // refresh necessário quando o CM estava num contentor hidden (display:none)
+      if (visitorEditor) setTimeout(() => visitorEditor.refresh(), 50);
       $('visitor-empty').style.display  = 'none';
       $('visitor-result').style.display = 'block';
     }
@@ -264,21 +296,33 @@ $('btn-dl-td').addEventListener('click', () => dlParser('td'));
 
 
 // ── Sub-abas internas (Parsing / Visitor) ─────────────────────────────
-document.querySelectorAll('.sub-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.sub;
-
-    document.querySelectorAll('.sub-tab').forEach(b => {
-      const active = b.dataset.sub === target;
-      b.style.color             = active ? 'var(--indigo)' : 'var(--muted)';
-      b.style.borderBottomColor = active ? 'var(--indigo)' : 'transparent';
-    });
-
-    document.querySelectorAll('.sub-pane').forEach(p => {
-      p.style.display = p.id === `sub-${target}` ? 'block' : 'none';
-    });
+// FIX: usa data-active em vez de borderBottomColor (devolve RGB computado
+// nos browsers, nunca a CSS variable literal — falha cruzada entre browsers)
+function setActiveSubTab(target) {
+  document.querySelectorAll('.sub-tab').forEach(b => {
+    const active = b.dataset.sub === target;
+    b.dataset.active     = active ? 'true' : 'false';
+    b.style.color        = active ? 'var(--indigo)' : 'var(--muted)';
+    b.style.borderBottom = active
+      ? '2px solid var(--indigo)'
+      : '2px solid transparent';
   });
+
+  document.querySelectorAll('.sub-pane').forEach(p => {
+    p.style.display = p.id === `sub-${target}` ? 'block' : 'none';
+  });
+
+  // CodeMirror precisa de refresh quando o contentor fica visível
+  if (target === 'visitor' && visitorEditor) {
+    setTimeout(() => visitorEditor.refresh(), 10);
+  }
+}
+
+document.querySelectorAll('.sub-tab').forEach(btn => {
+  btn.addEventListener('click', () => setActiveSubTab(btn.dataset.sub));
 });
+
+setActiveSubTab('parsing');
 
 
 // ── Testar frase (sub-aba Parsing) ────────────────────────────────────
@@ -290,8 +334,7 @@ async function runPhrase() {
   $('phrase-empty').style.display  = 'flex';
 
   if (!ready) {
-    showBanners('phrase-banners',
-      ['Analisa a gramática primeiro (sem conflitos).'], 'warn');
+    showBanners('phrase-banners', ['Analisa a gramática primeiro (sem conflitos).'], 'warn');
     return;
   }
   if (!phrase) return;
@@ -300,16 +343,12 @@ async function runPhrase() {
   try {
     const d = await post('/api/parse_phrase', { grammar, phrase });
 
-    if (!d.ok) {
-      showBanners('phrase-banners', d.errors, 'error');
-      return;
-    }
+    if (!d.ok) { showBanners('phrase-banners', d.errors, 'error'); return; }
 
     showBanners('phrase-banners', ['Frase reconhecida com sucesso.'], 'ok');
     $('phrase-empty').style.display  = 'none';
     $('phrase-result').style.display = 'block';
-
-    $('tree-svg-wrap').innerHTML = d.tree_svg;
+    $('tree-svg-wrap').innerHTML     = d.tree_svg;
 
     $('steps-tbody').innerHTML = d.steps.map(s => {
       const cls = s.action === 'ACEITE'           ? 's-ok'
@@ -331,10 +370,9 @@ async function runPhrase() {
 $('btn-phrase').addEventListener('click', runPhrase);
 $('phrase-input').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  // se a sub-aba activa for visitor, executa o visitor; senão o parsing
-  const activeSubTab = document.querySelector('.sub-tab[data-sub="visitor"]');
-  const visitorActive = activeSubTab &&
-    activeSubTab.style.borderBottomColor === 'var(--indigo)';
+  // FIX: data-active é cross-browser seguro; borderBottomColor não é
+  const visitorTab    = document.querySelector('.sub-tab[data-sub="visitor"]');
+  const visitorActive = visitorTab && visitorTab.dataset.active === 'true';
   if (visitorActive) runVisitor(); else runPhrase();
 });
 
@@ -342,30 +380,25 @@ $('phrase-input').addEventListener('keydown', e => {
 // ── Visitor (sub-aba Visitor) ─────────────────────────────────────────
 async function runVisitor() {
   const btn          = $('btn-run-visitor');
-  const phrase       = $('phrase-input').value.trim();  // mesma frase!
-  const visitor_code = $('visitor-code').value;
+  const phrase       = $('phrase-input').value.trim();
+  const visitor_code = getVisitorCode();
 
   $('visitor-banners').innerHTML = '';
   $('visitor-output-wrap').style.display = 'none';
 
   if (!ready) {
-    showBanners('visitor-banners',
-      ['Analisa a gramática primeiro (sem conflitos).'], 'warn');
+    showBanners('visitor-banners', ['Analisa a gramática primeiro (sem conflitos).'], 'warn');
     return;
   }
   if (!phrase) {
-    showBanners('visitor-banners',
-      ['Introduz uma frase no campo acima.'], 'warn');
+    showBanners('visitor-banners', ['Introduz uma frase no campo acima.'], 'warn');
     return;
   }
 
   setLoading(btn, true);
   try {
     const d = await post('/api/run_visitor', { grammar, phrase, visitor_code });
-    if (!d.ok) {
-      showBanners('visitor-banners', d.errors, 'error');
-      return;
-    }
+    if (!d.ok) { showBanners('visitor-banners', d.errors, 'error'); return; }
     showBanners('visitor-banners', ['Visitor executado com sucesso.'], 'ok');
     $('visitor-output-wrap').style.display = 'block';
     $('visitor-output').textContent = d.output;
@@ -379,21 +412,10 @@ $('btn-run-visitor').addEventListener('click', runVisitor);
 
 // ── Repor esqueleto + download ────────────────────────────────────────
 $('btn-reset-visitor').addEventListener('click', () => {
-  if (visitorSkeleton) $('visitor-code').value = visitorSkeleton;
+  if (visitorSkeleton) setVisitorCode(visitorSkeleton);
 });
 
 $('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
-
-
-// ── Tab no textarea do visitor ────────────────────────────────────────
-$('visitor-code').addEventListener('keydown', e => {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const ta = e.target, s = ta.selectionStart, end = ta.selectionEnd;
-    ta.value = ta.value.substring(0, s) + '    ' + ta.value.substring(end);
-    ta.selectionStart = ta.selectionEnd = s + 4;
-  }
-});
 
 
 // ── Tabs principais + exemplo ─────────────────────────────────────────
