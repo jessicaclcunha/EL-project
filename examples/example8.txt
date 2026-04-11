@@ -1,0 +1,13 @@
+start: Program
+
+Program -> Cmd CmdList
+CmdList -> Cmd CmdList | epsilon
+Cmd -> DIR NAME | FILE NAME | WRITE NAME STRING | CD NAME | UP
+
+DIR    = /dir/
+FILE   = /file/
+WRITE  = /write/
+CD     = /cd/
+UP     = /up/
+NAME   = /[a-zA-Z_][a-zA-Z0-9_.]*/
+STRING = /"[^"]*"/
