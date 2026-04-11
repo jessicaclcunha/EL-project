@@ -27,6 +27,12 @@ def t_PIPE(t):
     return t
 
 
+def t_REGEX(t):
+    r'/\S+/'
+    t.value = t.value[1:-1]   # remove as barras delimitadoras
+    return t
+
+
 def t_EQUALS(t):
     r'='
     return t
@@ -34,12 +40,6 @@ def t_EQUALS(t):
 
 def t_COLON(t):
     r':'
-    return t
-
-
-def t_REGEX(t):
-    r'/[^/]+/'
-    t.value = t.value[1:-1]   # remove as barras delimitadoras
     return t
 
 

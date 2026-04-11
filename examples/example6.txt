@@ -1,10 +1,1 @@
-start: Z
-
-Z -> Dir
-Dir -> '(' TEXTO Conteudo ')'
-      | Ficheiro
-
-Conteudo -> Conteudo Dir
-        | epsilon
-
-Ficheiro -> '[' TEXTO TEXTO ']'
+ 

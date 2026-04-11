@@ -1,9 +1,37 @@
-start: Sexp
+------- Verificar melhor
 
-Sexp   -> Exp '.'
-Exp    -> INT
-        | '(' Funcao ')'
-Funcao -> '+' Lista
-        | ’*’ Lista
-Lista  -> Lista Exp
-        | epsilon
+
+
+
+start : SQuery
+
+SQuery -> Query NUM ListaIds ListaLinhas
+
+Query -> SELECT Colunas FROM ID
+
+Colunas -> '*'
+        | ListaColunas
+
+ListaColunas -> ListaColunas ',' ID
+        | ID
+
+ListaIds -> ListaIds ID
+        | ID
+
+ListaLinhas -> ListaLinhas SEP ListaVal
+        | ListaVal
+
+ListaVal -> ListaVal Coluna
+        | Coluna
+
+Coluna -> COLUNANUM
+        | COLUNASTR
+
+
+SELECT    = /SELECT/
+FROM      = /FROM/
+ID        = /[a-zA-Z]\w*/
+NUM       = /\d+/
+SEP       = /\n+/
+COLUNANUM = /\d+(\.\d+)?/
+COLUNASTR = /[a-zA-Z]\w*/

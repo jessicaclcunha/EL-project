@@ -4,6 +4,9 @@ S -> Exp '.'
 Exp -> INT
     | '(' Funcao ')'
 Funcao -> '+' Lista
-    | ’*’ Lista
+    | '*' Lista
 Lista -> Exp Lista
     | epsilon
+
+
+INT = /\d+/

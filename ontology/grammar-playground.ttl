@@ -1,0 +1,357 @@
+@prefix : <http://rpcw.di.uminho.pt/2026/grammar-playground/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://rpcw.di.uminho.pt/2026/grammar-playground/> .
+
+<http://rpcw.di.uminho.pt/2026/grammar-playground> rdf:type owl:Ontology .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/conflitoAlternativa
+:conflitoAlternativa rdf:type owl:ObjectProperty ;
+                     rdfs:domain :Conflito ;
+                     rdfs:range :Alternativa .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/conflitoEm
+:conflitoEm rdf:type owl:ObjectProperty ,
+                     owl:FunctionalProperty ;
+            rdfs:domain :Conflito ;
+            rdfs:range :NaoTerminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/conflitoSimbolos
+:conflitoSimbolos rdf:type owl:ObjectProperty ;
+                  rdfs:domain :Conflito ;
+                  rdfs:range :Simbolo .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/contemSimbolo
+:contemSimbolo rdf:type owl:ObjectProperty ;
+               rdfs:domain :Alternativa ;
+               rdfs:range :Simbolo .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/entradaAlternativa
+:entradaAlternativa rdf:type owl:ObjectProperty ;
+                    rdfs:domain :Lookahead ;
+                    rdfs:range :Alternativa .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/entradaNT
+:entradaNT rdf:type owl:ObjectProperty ,
+                    owl:FunctionalProperty ;
+           rdfs:domain :Lookahead ;
+           rdfs:range :NaoTerminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/entradaT
+:entradaT rdf:type owl:ObjectProperty ,
+                   owl:FunctionalProperty ;
+          rdfs:domain :Lookahead ;
+          rdfs:range :Terminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/firstContem
+:firstContem rdf:type owl:ObjectProperty ;
+             rdfs:domain :FirstSet ;
+             rdfs:range :Simbolo .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/followContem
+:followContem rdf:type owl:ObjectProperty ;
+              rdfs:domain :FollowSet ;
+              rdfs:range :Simbolo .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/naPosicao
+:naPosicao rdf:type owl:ObjectProperty ;
+           rdfs:domain :Alternativa ;
+           rdfs:range :SimboloNaPosicao .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/posicaoSimbolo
+:posicaoSimbolo rdf:type owl:ObjectProperty ,
+                         owl:FunctionalProperty ;
+                rdfs:domain :SimboloNaPosicao ;
+                rdfs:range :Simbolo .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temAlternativa
+:temAlternativa rdf:type owl:ObjectProperty ;
+                rdfs:domain :Producao ;
+                rdfs:range :Alternativa .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temCabeca
+:temCabeca rdf:type owl:ObjectProperty ,
+                    owl:FunctionalProperty ;
+           rdfs:domain :Producao ;
+           rdfs:range :NaoTerminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temConflito
+:temConflito rdf:type owl:ObjectProperty ;
+             rdfs:domain :Gramatica ;
+             rdfs:range :Conflito .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temEntrada
+:temEntrada rdf:type owl:ObjectProperty ;
+            rdfs:domain :ParseTable ;
+            rdfs:range :Lookahead .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temFirst
+:temFirst rdf:type owl:ObjectProperty ,
+                   owl:FunctionalProperty ;
+          rdfs:domain :NaoTerminal ;
+          rdfs:range :FirstSet .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temFollow
+:temFollow rdf:type owl:ObjectProperty ,
+                    owl:FunctionalProperty ;
+           rdfs:domain :NaoTerminal ;
+           rdfs:range :FollowSet .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temNaoTerminal
+:temNaoTerminal rdf:type owl:ObjectProperty ;
+                rdfs:domain :Gramatica ;
+                rdfs:range :NaoTerminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temParseTable
+:temParseTable rdf:type owl:ObjectProperty ,
+                        owl:FunctionalProperty ;
+               rdfs:domain :Gramatica ;
+               rdfs:range :ParseTable .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temProducao
+:temProducao rdf:type owl:ObjectProperty ;
+             rdfs:domain :Gramatica ;
+             rdfs:range :Producao .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temStart
+:temStart rdf:type owl:ObjectProperty ,
+                   owl:FunctionalProperty ;
+          rdfs:domain :Gramatica ;
+          rdfs:range :Start .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/temTerminal
+:temTerminal rdf:type owl:ObjectProperty ;
+             rdfs:domain :Gramatica ;
+             rdfs:range :Terminal .
+
+
+#################################################################
+#    Data properties
+#################################################################
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/eLL1
+:eLL1 rdf:type owl:DatatypeProperty ,
+               owl:FunctionalProperty ;
+      rdfs:domain :Gramatica ;
+      rdfs:range xsd:boolean .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/eNulo
+:eNulo rdf:type owl:DatatypeProperty ,
+                owl:FunctionalProperty ;
+       rdfs:domain :Alternativa ;
+       rdfs:range xsd:boolean .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/lookahead
+:lookahead rdf:type owl:DatatypeProperty ;
+           rdfs:domain :Alternativa ;
+           rdfs:range xsd:string .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/nome
+:nome rdf:type owl:DatatypeProperty ,
+               owl:FunctionalProperty ;
+      rdfs:domain :Simbolo ;
+      rdfs:range xsd:string .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/nomeGramatica
+:nomeGramatica rdf:type owl:DatatypeProperty ,
+                        owl:FunctionalProperty ;
+               rdfs:domain :Gramatica ;
+               rdfs:range xsd:string .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/posicao
+:posicao rdf:type owl:DatatypeProperty ,
+                  owl:FunctionalProperty ;
+         rdfs:domain :SimboloNaPosicao ;
+         rdfs:range xsd:nonNegativeInteger .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/regex
+:regex rdf:type owl:DatatypeProperty ,
+                owl:FunctionalProperty ;
+       rdfs:domain :Terminal ;
+       rdfs:range xsd:string .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/tipoConflito
+:tipoConflito rdf:type owl:DatatypeProperty ,
+                       owl:FunctionalProperty ;
+              rdfs:domain :Conflito ;
+              rdfs:range xsd:string .
+
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Alternativa
+:Alternativa rdf:type owl:Class .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Conflito
+:Conflito rdf:type owl:Class ;
+          rdfs:subClassOf [ rdf:type owl:Restriction ;
+                            owl:onProperty :conflitoAlternativa ;
+                            owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ;
+                            owl:onClass :Alternativa
+                          ] ,
+                          [ rdf:type owl:Restriction ;
+                            owl:onProperty :conflitoEm ;
+                            owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                            owl:onClass :NaoTerminal
+                          ] .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Epsilon
+:Epsilon rdf:type owl:Class ;
+         rdfs:subClassOf :Terminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/FirstFirst
+:FirstFirst rdf:type owl:Class ;
+            rdfs:subClassOf :Conflito ;
+            owl:disjointWith :FirstFollow .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/FirstFollow
+:FirstFollow rdf:type owl:Class ;
+             rdfs:subClassOf :Conflito .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/FirstSet
+:FirstSet rdf:type owl:Class .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/FollowSet
+:FollowSet rdf:type owl:Class .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Gramatica
+:Gramatica rdf:type owl:Class ;
+           owl:equivalentClass [ rdf:type owl:Restriction ;
+                                 owl:onProperty :temStart ;
+                                 owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                                 owl:onClass :Start
+                               ] ;
+           rdfs:subClassOf [ rdf:type owl:Restriction ;
+                             owl:onProperty :temProducao ;
+                             owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                             owl:onClass :Producao
+                           ] .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Lookahead
+:Lookahead rdf:type owl:Class ;
+           rdfs:subClassOf [ rdf:type owl:Restriction ;
+                             owl:onProperty :entradaAlternativa ;
+                             owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                             owl:onClass :Alternativa
+                           ] ,
+                           [ rdf:type owl:Restriction ;
+                             owl:onProperty :entradaNT ;
+                             owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                             owl:onClass :NaoTerminal
+                           ] ,
+                           [ rdf:type owl:Restriction ;
+                             owl:onProperty :entradaT ;
+                             owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                             owl:onClass :Terminal
+                           ] .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/NaoTerminal
+:NaoTerminal rdf:type owl:Class ;
+             rdfs:subClassOf :Simbolo ;
+             owl:disjointWith :Terminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/ParseTable
+:ParseTable rdf:type owl:Class .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Producao
+:Producao rdf:type owl:Class ;
+          rdfs:subClassOf [ rdf:type owl:Restriction ;
+                            owl:onProperty :temAlternativa ;
+                            owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                            owl:onClass :Alternativa
+                          ] ,
+                          [ rdf:type owl:Restriction ;
+                            owl:onProperty :temCabeca ;
+                            owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                            owl:onClass :NaoTerminal
+                          ] .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Simbolo
+:Simbolo rdf:type owl:Class .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/SimboloNaPosicao
+:SimboloNaPosicao rdf:type owl:Class ;
+                  rdfs:subClassOf [ rdf:type owl:Restriction ;
+                                    owl:onProperty :posicaoSimbolo ;
+                                    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                                    owl:onClass :Simbolo
+                                  ] .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Start
+:Start rdf:type owl:Class ;
+       rdfs:subClassOf :NaoTerminal .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/Terminal
+:Terminal rdf:type owl:Class ;
+          rdfs:subClassOf :Simbolo .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/epsilon
+:epsilon rdf:type owl:NamedIndividual ,
+                  :Epsilon ;
+         :nome "ε" .
+
+
+###  http://rpcw.di.uminho.pt/2026/grammar-playground/fimInput
+:fimInput rdf:type owl:NamedIndividual ,
+                   :Terminal ;
+          :nome "$" .
+
+
+###  Generated by the OWL API (version 4.5.29.2024-05-13T12:11:03Z) https://github.com/owlcs/owlapi

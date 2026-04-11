@@ -1,10 +1,15 @@
+------- Verificar melhor
+
+
+
+
 start: Agenda
 
 Agenda -> DeclXML AAGENDA Lista FAGENDA
 
 DeclXML -> DCA ListaAtrib DCF
 
-ListaAtrib -> Atrib ListaAtrib| ε
+ListaAtrib -> Atrib ListaAtrib | ε
         
 Atrib -> ID '=' VATRIB
 
@@ -16,7 +21,8 @@ Elem -> Entrada
 
 Entrada -> AENTRADA ListaAtrib '>' Nome EntradaCont
 
-EntradaCont -> Telefone FENTRADA | Email Telefone FENTRADA
+EntradaCont -> Telefone FENTRADA 
+        | Email Telefone FENTRADA
 
 Nome  -> ANOME STRING FNOME
 Email -> AEMAIL STRING FEMAIL
@@ -29,3 +35,23 @@ GLista -> GElem GLista | ε
 GElem -> Entrada | Grupo | Ref 
 
 Ref -> AREF ListaAtrib '/' '>'
+
+
+ID       = /[_a-zA-Z]\w*/
+STRING   = /[^<]+/
+VATRIB   = /"[^"]*?\"/
+AAGENDA  = /<\s*agenda\s*\>/
+FAGENDA  = /<\/\s*agenda\s*\>/
+DCA      = /<\?\s*xml/
+DCF      = /\?\>/
+AENTRADA = /\<entrada/
+FENTRADA = /<\/\s*entrada\s*\>/
+AGRUPO   = /<entrada/
+FGRUPO   = /<\/\s*grupo\s*\>/
+AREF     = /<ref/
+ANOME    = /<\s*nome\s*\>/
+FNOME    = /<\/\s*nome\s*\>/
+AEMAIL   = /<\s*email\s*\>/
+FEMAIL   = /<\/\s*email\s*\>/
+ATELEFONE = /<\s*telefone\s*\>/
+FTELEFONE = /<\/\s*telefone\s*\>/

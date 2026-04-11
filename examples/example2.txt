@@ -2,3 +2,5 @@ start : Lista
 Lista -> '[' ']' | '[' Elems ']'
 Elems -> Elems ',' Elem | Elem
 Elem -> INT
+
+INT = /[0-9]+/

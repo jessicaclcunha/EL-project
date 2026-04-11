@@ -3,10 +3,10 @@ Gerador de Visitor Pattern para a gramática.
 """
 
 import re
+from collections import Counter
 
 
 def safe_name(nt):
-    """Converte nome do NT em nome Python válido."""
     name = nt.replace("'", "_prime")
     return re.sub(r'[^A-Za-z0-9_]', '_', name)
 
@@ -20,140 +20,224 @@ def is_epsilon_seq(seq):
 
 
 def _seq_repr(seq):
-    """Representação textual de uma sequência de símbolos."""
     if is_epsilon_seq(seq):
         return 'ε'
     return ' '.join(s.get_value() for s in seq.symbols)
 
 
-def _alt_index_comment(seqs):
+def _make_var_names(symbols):
     """
-    Gera comentários descritivos para cada alternativa, com índices dos filhos.
-    Exemplo:
-        # Alt 0 — Term ExprR  →  node.children[0]=Term, node.children[1]=ExprR
-        # Alt 1 — ε           →  node.children[0].label == 'ε'
+    Atribui nomes de variável semânticos a cada símbolo de uma sequência.
+
+    Regras:
+      - Terminal declarado (ex: PLUS, ASSIGN) → nome em minúsculas (ex: plus, assign)
+      - Terminal inline (ex: '(', ':=')       → conteúdo alfanumérico ou 'tok'
+      - Não-terminal (ex: Expr, StmtListR)    → snake_case (ex: expr, stmt_list_r)
+      - Colisões                              → sufixo numérico (expr1, expr2, …)
+
+    Devolve lista de strings com um nome por símbolo.
     """
-    lines = []
-    for i, seq in enumerate(seqs):
-        if is_epsilon_seq(seq):
-            lines.append(f'        # Alt {i} — ε  →  node.children[0].label == "ε"')
+    raw = []
+    for sym in symbols:
+        val = sym.get_value()
+        if sym.get_is_terminal():
+            # Strings inline como '(' ou ':=' → nome genérico baseado no conteúdo
+            if val.startswith(("'", '"')):
+                inner = val[1:-1]
+                clean = re.sub(r'[^A-Za-z0-9]', '', inner)
+                base  = clean.lower() if clean else 'tok'
+            else:
+                base = val.lower()
         else:
-            syms = seq.symbols
-            children_desc = ', '.join(
-                f'node.children[{j}]={s.get_value()}'
-                for j, s in enumerate(syms)
-            )
-            lines.append(
-                f'        # Alt {i} — {_seq_repr(seq)}'
-                f'  →  {children_desc}'
-            )
-    return lines
+            # Não-terminal: PascalCase / camelCase → snake_case
+            s    = val.replace("'", "_prime")
+            s    = re.sub(r'(?<=[a-z0-9])([A-Z])', r'_\1', s)
+            base = s.lower()
+        raw.append(base)
+
+    # Resolver colisões com sufixo numérico
+    counts = Counter(raw)
+    seen   = Counter()
+    result = []
+    for name in raw:
+        if counts[name] > 1:
+            seen[name] += 1
+            result.append(f'{name}{seen[name]}')
+        else:
+            result.append(name)
+    return result
 
 
-def _detect_condition(seq, i):
+def _alt_detect_condition(seq):
     """
-    Gera a condição Python para detetar que a alternativa i foi escolhida.
-    Usa o label do primeiro filho e/ou o número total de filhos.
+    Condição Python legível para detetar que esta alternativa foi expandida.
+    Combina o label do primeiro filho com o número total de filhos.
     """
     if is_epsilon_seq(seq):
         return 'node.children[0].label == "ε"'
     first_sym = seq.symbols[0]
-    n = len(seq.symbols)
-    label = first_sym.get_value()
+    n         = len(seq.symbols)
+    label     = first_sym.get_value()
+    # Para terminais inline, o label na árvore é o conteúdo sem aspas
+    if label.startswith(("'", '"')):
+        label = label[1:-1]
     return f'len(node.children) == {n} and node.children[0].label == "{label}"'
 
 
-def generate_visitor(grammar):
+def _gen_bindings(symbols, var_names, indent):
     """
-    Gera código Python de um Visitor para a gramática dada.
+    Gera linhas de código que vinculam variáveis com nomes semânticos
+    aos filhos corretos do nó.
 
-    O esqueleto gerado inclui:
-      - Classe base Visitor com dispatch automático
-      - Classe CodeGen com um método visit_<NT> por não-terminal
-      - Comentários mostrando as alternativas e como aceder a node.children
-      - Exemplos de como detetar qual alternativa foi usada
+      Terminais  → var = node.children[i].lexema      (valor do token)
+      NTs        → var = self.visit(node.children[i]) (resultado recursivo)
     """
+    lines = []
+    pad = ' ' * indent
+    for i, (sym, var) in enumerate(zip(symbols, var_names)):
+        val = sym.get_value()
+        if sym.get_is_terminal():
+            lines.append(
+                f'{pad}{var} = node.children[{i}].lexema'
+                f'  # terminal {val}'
+            )
+        else:
+            lines.append(
+                f'{pad}{var} = self.visit(node.children[{i}])'
+                f'  # {val}'
+            )
+    return lines
+
+
+def generate_visitor(grammar):
     rules = grammar.get_rules()
-    start = grammar.get_start()
 
     lines = []
     w = lines.append
 
-    # ── Cabeçalho ────────────────────────────────────────────────────────
+    # ── Cabeçalho ─────────────────────────────────────────────────────
     w('"""')
     w('Visitor para geração de código — gerado pelo Grammar Playground.')
     w('')
-    w('Como usar:')
-    w('  1. Cada método visit_<NT>(self, node) recebe um TreeNode.')
-    w('  2. node.label     — nome do NT ou tipo do terminal')
-    w('  3. node.lexema    — valor do token (só em folhas terminais, ex: "42", "+=")')
-    w('  4. node.children  — lista de TreeNode filhos')
-    w('  5. self.visit(child) — visita recursiva de um filho')
-    w('  6. Por omissão cada método delega em generic_visit, que concatena os filhos.')
+    w('COMO USAR')
+    w('─────────')
+    w('Cada método visit_<NT>(self, node) já vincula os filhos a variáveis')
+    w('com nomes semânticos. Basta substituir o "return ..." pelo resultado')
+    w('pretendido.')
+    w('')
+    w('  Terminais  →  variável contém o lexema (string),  ex: plus = "+"')
+    w('  NTs        →  variável contém o resultado de self.visit(...)')
+    w('')
+    w('Exemplo para  Expr -> Term ExprR :')
+    w('    def visit_Expr(self, node):')
+    w('        term, expr_r = self.bind(node, "term", "expr_r")')
+    w('        return term + expr_r   # ← lógica de negócio')
     w('"""')
     w('')
 
-    # ── Classe base Visitor ───────────────────────────────────────────────
+    # ── Classe base Visitor ───────────────────────────────────────────
     w('class Visitor:')
-    w('    """Classe base — despacha visit_<label>(node) automaticamente."""')
+    w('    """Classe base com dispatch automático e helper bind()."""')
     w('')
     w('    def visit(self, node):')
-    w('        """Ponto de entrada: visita um nó da árvore."""')
-    w('        # Folha terminal — devolve o lexema directamente')
-    w('        if node.lexema is not None:')
+    w('        """Visita um nó: despacha para visit_<NT> ou generic_visit."""')
+    w('        if node.lexema is not None:          # folha terminal')
     w('            return node.lexema')
-    w('        # Nó épsilon')
-    w('        if node.label == "ε":')
+    w('        if node.label == "\u03b5":                # nó epsilon')
     w('            return ""')
-    w('        # Despacha para o método específico (ou generic_visit)')
     w('        method = getattr(self, "visit_" + node.label, self.generic_visit)')
     w('        return method(node)')
     w('')
     w('    def generic_visit(self, node):')
-    w('        """Visita por omissão: concatena resultados dos filhos com espaço."""')
+    w('        """Fallback: concatena resultados dos filhos separados por espaço."""')
     w('        parts = []')
     w('        for child in node.children:')
     w('            r = self.visit(child)')
-    w('            if r is not None and str(r).strip() != "":')
+    w('            if r is not None and str(r).strip():')
     w('                parts.append(str(r))')
     w('        return " ".join(parts)')
     w('')
+    w('    def bind(self, node, *names):')
+    w('        """')
+    w('        Vincula os filhos de *node* a variáveis com nomes semânticos.')
+    w('')
+    w('        Para cada filho i:')
+    w('          • filho terminal  →  devolve node.children[i].lexema  (string)')
+    w('          • filho NT        →  devolve self.visit(node.children[i])')
+    w('          • filho ε         →  devolve ""')
+    w('')
+    w('        Uso:')
+    w('            left, op, right = self.bind(node, "left", "op", "right")')
+    w('        """')
+    w('        if len(names) != len(node.children):')
+    w('            raise ValueError(')
+    w('                f"bind: {len(names)} nome(s) para {len(node.children)}"')
+    w('                f" filho(s) em \'{node.label}\'"')
+    w('            )')
+    w('        result = []')
+    w('        for child in node.children:')
+    w('            if child.label == "\u03b5":')
+    w('                result.append("")')
+    w('            elif child.lexema is not None:')
+    w('                result.append(child.lexema)')
+    w('            else:')
+    w('                result.append(self.visit(child))')
+    w('        return result')
+    w('')
     w('')
 
-    # ── Classe CodeGen ────────────────────────────────────────────────────
+    # ── Classe CodeGen ────────────────────────────────────────────────
     w('class CodeGen(Visitor):')
     w('    """')
-    w('    Visitor de geração de código — personalize os métodos abaixo.')
+    w('    Visitor de geração de código.')
     w('')
-    w('    Cada método recebe um TreeNode com:')
-    w('      node.label      — nome do NT (ex: "Expr", "Term")')
-    w('      node.children   — lista de filhos (TreeNode)')
-    w('      node.lexema     — None para NTs; valor do token para terminais')
-    w('')
-    w('    Para visitar um filho: self.visit(node.children[i])')
-    w('    Para obter o lexema de um terminal filho: node.children[i].lexema')
+    w('    Cada método já vincula os filhos às variáveis semânticas.')
+    w('    Substitui o corpo do return pela lógica pretendida.')
     w('    """')
     w('')
 
     for rule in rules:
-        nt = rule.get_head_name()
-        seqs = rule.altlist.sequences
-        func = safe_name(nt)
+        nt     = rule.get_head_name()
+        seqs   = rule.altlist.sequences
+        func   = safe_name(nt)
         n_alts = len(seqs)
 
+        # Separador visual e assinatura da regra
+        w(f'    # {"─" * 58}')
+        alts_summary = '  |  '.join(
+            'ε' if is_epsilon_seq(s)
+            else ' '.join(sym.get_value() for sym in s.symbols)
+            for s in seqs
+        )
+        w(f'    # {nt}  →  {alts_summary}')
         w(f'    def visit_{func}(self, node):')
 
-        # Comentários com alternativas e índices dos filhos
-        w(f'        # {nt} tem {n_alts} alternativa(s):')
-        for comment in _alt_index_comment(seqs):
-            w(comment)
+        if n_alts == 1:
+            seq = seqs[0]
+            if is_epsilon_seq(seq):
+                w(f'        # Alternativa única: ε — sem filhos significativos.')
+                w(f'        return ""')
+            else:
+                # Única alternativa: vinculações directas + dica com bind()
+                var_names = _make_var_names(seq.symbols)
+                # via bind()
+                names_repr = ', '.join(f'"{v}"' for v in var_names)
+                vars_repr  = ', '.join(var_names)
+                w(f'        # Vincula os filhos a variáveis semânticas:')
+                w(f'        {vars_repr} = self.bind(node, {names_repr})')
+                w(f'')
+                # Alternativa manual (mais explícita), comentada
+                w(f'        # Equivalente explícito:')
+                for line in _gen_bindings(seq.symbols, var_names, indent=8):
+                    w(f'        #   {line.lstrip()}')
+                w(f'')
+                ret_hint = ' + '.join(var_names) if len(var_names) <= 4 \
+                           else var_names[0]
+                w(f'        # ↓ Substitui pelo resultado pretendido')
+                w(f'        return self.generic_visit(node)  # ex: return {ret_hint}')
 
-        # Se há mais de uma alternativa, gerar bloco if/elif de exemplo
-        if n_alts > 1:
-            w('        #')
-            w('        # Exemplo de como detetar a alternativa escolhida:')
-
-            # Encontrar a alternativa epsilon, se existir
+        else:
+            # Múltiplas alternativas
             eps_idx = next(
                 (i for i, s in enumerate(seqs) if is_epsilon_seq(s)), None
             )
@@ -161,39 +245,38 @@ def generate_visitor(grammar):
             first_branch = True
             for i, seq in enumerate(seqs):
                 if is_epsilon_seq(seq):
-                    continue  # tratada no else/elif final
-                cond = _detect_condition(seq, i)
-                kw = '#   if' if first_branch else '#   elif'
+                    continue
+
+                cond      = _alt_detect_condition(seq)
+                kw        = 'if' if first_branch else 'elif'
+                alt_label = _seq_repr(seq)
                 first_branch = False
+
                 w(f'        {kw} {cond}:')
-                # Gerar acesso a cada filho como comentário
-                for j, sym in enumerate(seq.symbols):
-                    if sym.get_is_terminal():
-                        w(f'        #       tok_{j} = node.children[{j}].lexema  # terminal {sym.get_value()}')
-                    else:
-                        w(f'        #       val_{j} = self.visit(node.children[{j}])  # {sym.get_value()}')
-                w(f'        #       pass  # substitui por: return ...')
+                w(f'            # Alternativa: {nt} → {alt_label}')
+
+                var_names  = _make_var_names(seq.symbols)
+                names_repr = ', '.join(f'"{v}"' for v in var_names)
+                vars_repr  = ', '.join(var_names)
+                w(f'            {vars_repr} = self.bind(node, {names_repr})')
+
+                ret_hint = ' + '.join(var_names) if len(var_names) <= 4 \
+                           else var_names[0]
+                w(f'            # ↓ Substitui pelo resultado pretendido')
+                w(f'            return self.generic_visit(node)  # ex: return {ret_hint}')
+                w(f'')
 
             if eps_idx is not None:
-                kw = '#   if' if first_branch else '#   else'
-                w(f'        {kw}:  # alternativa ε')
-                w(f'        #       return ""')
+                kw = 'if' if first_branch else 'else'
+                w(f'        {kw}:  # Alternativa: {nt} → ε')
+                w(f'            return ""')
             elif not first_branch:
-                w(f'        #   else:')
-                w(f'        #       raise ValueError(f"Alternativa desconhecida em {nt}: {{node.children}}")')
+                w(f'        else:')
+                w(f'            raise ValueError(')
+                w(f'                f"visit_{func}: alternativa desconhecida '
+                  f'(filhos={{[c.label for c in node.children]}})"')
+                w(f'            )')
 
-        elif n_alts == 1 and not is_epsilon_seq(seqs[0]):
-            # Só uma alternativa, não-epsilon: mostrar acesso directo
-            seq = seqs[0]
-            w('        #')
-            w('        # Acesso directo aos filhos:')
-            for j, sym in enumerate(seq.symbols):
-                if sym.get_is_terminal():
-                    w(f'        #   tok_{j} = node.children[{j}].lexema  # terminal {sym.get_value()}')
-                else:
-                    w(f'        #   val_{j} = self.visit(node.children[{j}])  # {sym.get_value()}')
-
-        w('        return self.generic_visit(node)')
-        w('')
+        w(f'')
 
     return '\n'.join(lines)
