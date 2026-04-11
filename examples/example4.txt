@@ -1,57 +1,50 @@
-------- Verificar melhor
-
-
-
-
 start: Agenda
 
-Agenda -> DeclXML AAGENDA Lista FAGENDA
+Agenda     -> DeclXML AAGENDA Lista FAGENDA
 
-DeclXML -> DCA ListaAtrib DCF
+DeclXML    -> DCA ListaAtrib DCF
 
-ListaAtrib -> Atrib ListaAtrib | ε
-        
-Atrib -> ID '=' VATRIB
+ListaAtrib -> Atrib ListaAtrib | epsilon
 
-Lista -> Elem Lista 
-        | ε
+Atrib      -> ID '=' VATRIB
 
-Elem -> Entrada 
-        | Grupo
+Lista      -> Elem Lista | epsilon
 
-Entrada -> AENTRADA ListaAtrib '>' Nome EntradaCont
+Elem       -> Entrada | Grupo
 
-EntradaCont -> Telefone FENTRADA 
-        | Email Telefone FENTRADA
+Entrada    -> AENTRADA ListaAtrib '>' Nome EntradaCont
 
-Nome  -> ANOME STRING FNOME
-Email -> AEMAIL STRING FEMAIL
+EntradaCont -> Telefone FENTRADA
+             | Email Telefone FENTRADA
+
+Nome     -> ANOME STRING FNOME
+Email    -> AEMAIL STRING FEMAIL
 Telefone -> ATELEFONE STRING FTELEFONE
 
-Grupo -> AGRUPO ListaAtrib '>' GLista FGRUPO
+Grupo  -> AGRUPO ListaAtrib '>' GLista FGRUPO
 
-GLista -> GElem GLista | ε
-       
-GElem -> Entrada | Grupo | Ref 
+GLista -> GElem GLista | epsilon
 
-Ref -> AREF ListaAtrib '/' '>'
+GElem  -> Entrada | Grupo | Ref
+
+Ref    -> AREF ListaAtrib '/' '>'
 
 
-ID       = /[_a-zA-Z]\w*/
-STRING   = /[^<]+/
-VATRIB   = /"[^"]*?\"/
-AAGENDA  = /<\s*agenda\s*\>/
-FAGENDA  = /<\/\s*agenda\s*\>/
-DCA      = /<\?\s*xml/
-DCF      = /\?\>/
-AENTRADA = /\<entrada/
-FENTRADA = /<\/\s*entrada\s*\>/
-AGRUPO   = /<entrada/
-FGRUPO   = /<\/\s*grupo\s*\>/
-AREF     = /<ref/
-ANOME    = /<\s*nome\s*\>/
-FNOME    = /<\/\s*nome\s*\>/
-AEMAIL   = /<\s*email\s*\>/
-FEMAIL   = /<\/\s*email\s*\>/
-ATELEFONE = /<\s*telefone\s*\>/
-FTELEFONE = /<\/\s*telefone\s*\>/
+AAGENDA   = /<agenda>/
+FAGENDA   = /<\/agenda>/
+DCA       = /<\?xml[^?]*/
+DCF       = /\?>/
+FENTRADA  = /<\/entrada>/
+AENTRADA  = /<entrada/
+FGRUPO    = /<\/grupo>/
+AGRUPO    = /<grupo/
+FNOME     = /<\/nome>/
+ANOME     = /<nome>/
+FEMAIL    = /<\/email>/
+AEMAIL    = /<email>/
+FTELEFONE = /<\/telefone>/
+ATELEFONE = /<telefone>/
+AREF      = /<ref/
+VATRIB    = /"[^"]*"/
+STRING    = /\d[^<>=]*|[_a-zA-Z]\w*[^<>"=\w][^<>=]*/
+ID        = /[_a-zA-Z]\w*/

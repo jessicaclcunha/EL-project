@@ -1,37 +1,27 @@
-------- Verificar melhor
+start: SQuery
 
-
-
-
-start : SQuery
-
-SQuery -> Query NUM ListaIds ListaLinhas
+SQuery -> Query ListaIds ListaLinhas
 
 Query -> SELECT Colunas FROM ID
 
-Colunas -> '*'
-        | ListaColunas
+Colunas -> STAR | ListaColunas
 
-ListaColunas -> ListaColunas ',' ID
-        | ID
+ListaColunas -> ListaColunas COMMA ID | ID
 
-ListaIds -> ListaIds ID
-        | ID
+ListaIds -> ListaIds ID | ID
 
-ListaLinhas -> ListaLinhas SEP ListaVal
-        | ListaVal
+ListaLinhas -> ListaLinhas SEP ListaVal | ListaVal
 
-ListaVal -> ListaVal Coluna
-        | Coluna
+ListaVal -> ListaVal Coluna | Coluna
 
-Coluna -> COLUNANUM
-        | COLUNASTR
+Coluna -> COLUNANUM | COLUNASTR
 
 
 SELECT    = /SELECT/
 FROM      = /FROM/
+STAR      = /\*/
+COMMA     = /,/
 ID        = /[a-zA-Z]\w*/
-NUM       = /\d+/
-SEP       = /\n+/
+SEP       = /\|/
 COLUNANUM = /\d+(\.\d+)?/
 COLUNASTR = /[a-zA-Z]\w*/

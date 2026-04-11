@@ -1,7 +1,7 @@
 import sys
 import io
 import re
-
+import uuid
 from flask import Flask, render_template, request, jsonify, send_file
 
 sys.path.insert(0, 'src')
@@ -81,9 +81,6 @@ def apply_suggestions():
 
 
 def rebuild_grammar(src, replacements):
-    """
-    Reconstrói a gramática substituindo as regras dos NTs afectados pelas sugestões.
-    """
     lines = src.splitlines()
 
     TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*\s*=\s*/")
@@ -124,21 +121,17 @@ def rebuild_grammar(src, replacements):
             blocks.append((None, [line]))
             i += 1
 
-    pending = dict(replacements)
-    inserted = set()
+    pending  = dict(replacements)
     out_rules = []
 
     for (nt, block_lines) in blocks:
         if nt is not None and nt in pending:
             out_rules.extend(pending[nt])
-            inserted.add(nt)
             del pending[nt]
-
             still_pending = list(pending.keys())
             for new_nt in still_pending:
                 if new_nt.startswith(nt):
                     out_rules.extend(pending[new_nt])
-                    inserted.add(new_nt)
                     del pending[new_nt]
         else:
             out_rules.extend(block_lines)
@@ -198,7 +191,6 @@ def parse_phrase():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
-    
     patterns = dict(grammar.get_token_patterns())
     for t in grammar.get_terminals():
         if t.startswith(("'", '"')):
@@ -221,7 +213,6 @@ def parse_phrase():
 
 @app.route('/api/run_visitor', methods=['POST'])
 def run_visitor():
-    """Executa o código do visitor personalizado sobre uma frase."""
     body         = request.get_json()
     src          = body.get('grammar', '')
     phrase       = body.get('phrase', '')
@@ -234,7 +225,6 @@ def run_visitor():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
-    
     patterns = dict(grammar.get_token_patterns())
     for t in grammar.get_terminals():
         if t.startswith(("'", '"')):
@@ -360,15 +350,28 @@ def ser_table(table, grammar):
     return {'terminals': terminals, 'rows': rows}
 
 
+def _esc(s):
+    return (s.replace('&', '&amp;').replace('<', '&lt;')
+             .replace('>', '&gt;').replace('"', '&quot;'))
+
+def _btn_style():
+    """Estilo CSS inline partilhado pelos botões de controlo da árvore."""
+    return (
+        "width:32px;height:32px;border-radius:6px;border:1px solid #e2e2dc;"
+        "background:#fff;cursor:pointer;font-size:16px;"
+        "display:inline-flex;align-items:center;justify-content:center;"
+        "font-family:sans-serif;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.08);"
+    )
+
 
 def tree_to_svg(root):
     class Slot:
         def __init__(self, node, depth):
-            self.nt     = node.label
-            self.lexema = getattr(node, 'lexema', None)
-            self.depth  = depth
+            self.label    = node.label
+            self.lexema   = getattr(node, 'lexema', None)
+            self.depth    = depth
             self.children = []
-            self.x = 0.0
+            self.x        = 0.0
 
     def build(node, depth):
         s = Slot(node, depth)
@@ -377,62 +380,65 @@ def tree_to_svg(root):
         return s
 
     root_slot = build(root, 0)
-
     counter = [0]
     def assign_x(s):
         if not s.children:
-            s.x = counter[0]; counter[0] += 1
+            s.x = float(counter[0])
+            counter[0] += 1
         else:
-            for c in s.children: assign_x(c)
+            for c in s.children:
+                assign_x(c)
             s.x = sum(c.x for c in s.children) / len(s.children)
     assign_x(root_slot)
-
+    
     all_slots = []
     def collect(s):
         all_slots.append(s)
-        for c in s.children: collect(c)
+        for c in s.children:
+            collect(c)
+
     collect(root_slot)
 
     if not all_slots:
-        return '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"></svg>'
+        return '<p style="color:#888;font-size:13px">Árvore vazia.</p>'
 
+    n_leaves  = counter[0]
     max_depth = max(s.depth for s in all_slots)
-    max_x     = max(s.x     for s in all_slots)
 
-    R     = 20
-    H_GAP = 68
-    V_GAP = 82
-    PAD   = 44
+    FONT   = 12     # px — fonte dos labels
+    FONT_L = 10     # px — fonte dos lexemas
+    RY     = 16     # meia-altura do rectângulo do nó
+    PAD_X  = 10     # padding horizontal interno
+    H_GAP  = 120    # espaçamento horizontal entre folhas
+    V_GAP  = 90     # espaçamento vertical entre níveis
+    PAD    = 70     # margem exterior do SVG
 
-    W = max(int((max_x + 1) * H_GAP + PAD * 2), 200)
-    H = max(int((max_depth + 1) * V_GAP + PAD * 2), 100)
+    W = max(500, int(n_leaves * H_GAP + PAD * 2))
+    H = max(200, int((max_depth + 1) * V_GAP + PAD * 2 + 40))
 
     def cx(s): return PAD + s.x * H_GAP
     def cy(s): return PAD + s.depth * V_GAP
 
-    BG      = '#ffffff'
-    EDGE    = '#d1d5db'
-    NT_F    = '#eef2ff'; NT_S = '#6366f1'; NT_T = '#3730a3'
-    LF_F    = '#f0fdf4'; LF_S = '#16a34a'; LF_T = '#15803d'
-    LF_VAL  = '#c2410c'
-    EPS_F   = '#f9fafb'; EPS_S = '#9ca3af'; EPS_T = '#6b7280'
+    NT_F  = '#eef2ff'; NT_S  = '#6366f1'; NT_T  = '#3730a3'
+    LF_F  = '#f0fdf4'; LF_S  = '#16a34a'; LF_T  = '#15803d'
+    LF_V  = '#c2410c'
+    EPS_F = '#f8fafc'; EPS_S = '#94a3b8'; EPS_T = '#64748b'
+    EDGE  = '#cbd5e1'
 
-    out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f"style=\"background:{BG};font-family:'JetBrains Mono',monospace\">"
-    ]
-
+    edges = []
+    nodes = []
+    
     for s in all_slots:
         for c in s.children:
-            out.append(
+            edges.append(
                 f'<line x1="{cx(s):.1f}" y1="{cy(s):.1f}" '
                 f'x2="{cx(c):.1f}" y2="{cy(c):.1f}" '
-                f'stroke="{EDGE}" stroke-width="1.5"/>'
+                f'stroke="{EDGE}" stroke-width="1.8"/>'
             )
 
     for s in all_slots:
         x, y    = cx(s), cy(s)
-        is_eps  = s.nt == 'ε'
+        is_eps  = s.label == 'ε'
         is_leaf = not s.children
 
         if is_eps:
@@ -442,35 +448,133 @@ def tree_to_svg(root):
         else:
             fill, stroke, tc = NT_F, NT_S, NT_T
 
-        out.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{R}" '
-            f'fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>'
-        )
+        char_w = FONT * 0.63
+        rx = max(22, len(s.label) * char_w / 2 + PAD_X)
 
-        lbl = s.nt if len(s.nt) <= 8 else s.nt[:7] + '…'
-        out.append(
+        nodes.append(
+            f'<rect x="{x - rx:.1f}" y="{y - RY:.1f}" '
+            f'width="{rx * 2:.1f}" height="{RY * 2}" rx="6" '
+            f'fill="{fill}" stroke="{stroke}" stroke-width="1.8"/>'
+        )
+        nodes.append(
             f'<text x="{x:.1f}" y="{y:.1f}" dy="0.35em" '
-            f'text-anchor="middle" font-size="9.5" font-weight="500" fill="{tc}">'
-            f'{_esc(lbl)}</text>'
+            f'text-anchor="middle" font-size="{FONT}" font-weight="600" '
+            f'font-family="\'JetBrains Mono\',monospace" fill="{tc}">'
+            f'{_esc(s.label)}</text>'
         )
 
         if is_leaf and s.lexema is not None:
-            val = s.lexema if len(s.lexema) <= 10 else s.lexema[:9] + '…'
-            out.append(
-                f'<text x="{x:.1f}" y="{y + R + 10:.1f}" '
-                f'text-anchor="middle" font-size="9" fill="{LF_VAL}">'
-                f'{_esc(val)}</text>'
+            nodes.append(
+                f'<text x="{x:.1f}" y="{y + RY + 14:.1f}" '
+                f'text-anchor="middle" font-size="{FONT_L}" '
+                f'font-family="\'JetBrains Mono\',monospace" fill="{LF_V}">'
+                f'{_esc(s.lexema)}</text>'
             )
 
-        out.append(f'<title>{_esc(s.nt)}{(" = " + s.lexema) if s.lexema else ""}</title>')
+        tooltip = s.label + (f' = {s.lexema}' if s.lexema else '')
+        nodes.append(f'<title>{_esc(tooltip)}</title>')
 
-    out.append('</svg>')
-    return '\n'.join(out)
+    inner_svg = '\n'.join(edges + nodes)
 
+    uid = uuid.uuid4().hex[:8]
 
-def _esc(s):
-    return (s.replace('&', '&amp;').replace('<', '&lt;')
-             .replace('>', '&gt;').replace('"', '&quot;'))
+    return f"""<div id="tc{uid}" style="position:relative;border:1px solid #e2e2dc;
+border-radius:6px;background:#fff;overflow:hidden;width:100%;height:460px;user-select:none;">
+
+  <div style="position:absolute;top:8px;right:8px;z-index:10;display:flex;gap:5px;">
+    <button onclick="tz{uid}(1.2)"  title="Zoom in"   style="{_btn_style()}">＋</button>
+    <button onclick="tz{uid}(0.83)" title="Zoom out"  style="{_btn_style()}">－</button>
+    <button onclick="tr{uid}()"     title="Reset"     style="{_btn_style()}">⌂</button>
+    <button onclick="tm{uid}()" id="tb{uid}" title="Maximizar" style="{_btn_style()}">⛶</button>
+  </div>
+
+  <svg id="ts{uid}" width="{W}" height="{H}"
+       style="display:block;cursor:grab;touch-action:none"
+       xmlns="http://www.w3.org/2000/svg">
+    <g id="tg{uid}">{inner_svg}</g>
+  </svg>
+</div>
+
+<script>
+(function(){{
+  var c=document.getElementById('tc{uid}');
+  var s=document.getElementById('ts{uid}');
+  var g=document.getElementById('tg{uid}');
+  var W={W},H={H},sc=1,tx=0,ty=0,dr=false,lx=0,ly=0,max=false;
+
+  function at(){{ g.setAttribute('transform','translate('+tx+','+ty+') scale('+sc+')'); }}
+
+  function fit(){{
+    var cw=c.clientWidth||700, ch=c.clientHeight||460;
+    sc=Math.min(cw/W, ch/H, 1)*0.92;
+    tx=(cw-W*sc)/2; ty=(ch-H*sc)/2; at();
+  }}
+  setTimeout(fit,50);
+
+  window.tz{uid}=function(f){{
+    var cw=c.clientWidth||700,ch=c.clientHeight||460;
+    tx=cw/2-(cw/2-tx)*f; ty=ch/2-(ch/2-ty)*f; sc*=f; at();
+  }};
+  window.tr{uid}=function(){{ fit(); }};
+
+  s.addEventListener('wheel',function(e){{
+    e.preventDefault();
+    var f=e.deltaY<0?1.12:0.89;
+    var r=s.getBoundingClientRect();
+    var mx=e.clientX-r.left,my=e.clientY-r.top;
+    tx=mx-(mx-tx)*f; ty=my-(my-ty)*f; sc*=f; at();
+  }},{{passive:false}});
+
+  s.addEventListener('mousedown',function(e){{
+    if(e.button)return; dr=true; lx=e.clientX; ly=e.clientY; s.style.cursor='grabbing';
+  }});
+  window.addEventListener('mousemove',function(e){{
+    if(!dr)return; tx+=e.clientX-lx; ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; at();
+  }});
+  window.addEventListener('mouseup',function(){{ dr=false; s.style.cursor='grab'; }});
+
+  var t1x=0,t1y=0,tpd=0;
+  s.addEventListener('touchstart',function(e){{
+    if(e.touches.length===1){{ t1x=e.touches[0].clientX; t1y=e.touches[0].clientY; }}
+    else if(e.touches.length===2)
+      tpd=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,
+                     e.touches[1].clientY-e.touches[0].clientY);
+  }},{{passive:true}});
+  s.addEventListener('touchmove',function(e){{
+    e.preventDefault();
+    if(e.touches.length===1){{
+      tx+=e.touches[0].clientX-t1x; ty+=e.touches[0].clientY-t1y;
+      t1x=e.touches[0].clientX; t1y=e.touches[0].clientY; at();
+    }} else if(e.touches.length===2){{
+      var pd=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,
+                        e.touches[1].clientY-e.touches[0].clientY);
+      var f=pd/tpd; tpd=pd;
+      var r=s.getBoundingClientRect();
+      var mx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left;
+      var my=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+      tx=mx-(mx-tx)*f; ty=my-(my-ty)*f; sc*=f; at();
+    }}
+  }},{{passive:false}});
+
+  window.tm{uid}=function(){{
+    var btn=document.getElementById('tb{uid}');
+    if(!max){{
+      c.style.cssText+='position:fixed!important;top:10px!important;left:10px!important;'
+        +'right:10px!important;bottom:10px!important;width:auto!important;'
+        +'height:auto!important;z-index:9999!important;'
+        +'box-shadow:0 8px 40px rgba(0,0,0,.3)!important;';
+      btn.textContent='✕'; btn.title='Minimizar'; max=true;
+    }} else {{
+      c.style.position='relative';
+      c.style.top=c.style.left=c.style.right=c.style.bottom='';
+      c.style.width='100%'; c.style.height='460px';
+      c.style.zIndex=''; c.style.boxShadow='';
+      btn.textContent='⛶'; btn.title='Maximizar'; max=false;
+    }}
+    setTimeout(fit,30);
+  }};
+}})();
+</script>"""
 
 
 if __name__ == '__main__':

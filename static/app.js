@@ -348,7 +348,12 @@ async function runPhrase() {
     showBanners('phrase-banners', ['Frase reconhecida com sucesso.'], 'ok');
     $('phrase-empty').style.display  = 'none';
     $('phrase-result').style.display = 'block';
-    $('tree-svg-wrap').innerHTML     = d.tree_svg;
+    const container = $('tree-svg-wrap');
+    container.innerHTML = ''; 
+    const range = document.createRange();
+    range.selectNode(container);
+    const fragment = range.createContextualFragment(d.tree_svg);
+    container.appendChild(fragment);
 
     $('steps-tbody').innerHTML = d.steps.map(s => {
       const cls = s.action === 'ACEITE'           ? 's-ok'
