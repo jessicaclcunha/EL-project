@@ -403,13 +403,47 @@ async function runVisitor() {
   setLoading(btn, true);
   try {
     const d = await post('/api/run_visitor', { grammar, phrase, visitor_code });
-    if (!d.ok) { showBanners('visitor-banners', d.errors, 'error'); return; }
+
+    if (!d.ok) {
+      showVisitorError(d);
+      if (d.line && visitorEditor) {
+        visitorEditor.focus();
+        visitorEditor.setCursor({ line: d.line - 1, ch: 0 });
+        visitorEditor.addLineClass(d.line - 1, 'background', 'cm-error-line');
+        setTimeout(() => visitorEditor.removeLineClass(d.line - 1, 'background', 'cm-error-line'), 3000);
+      }
+      return;
+    }
+
     showBanners('visitor-banners', ['Visitor executado com sucesso.'], 'ok');
     $('visitor-output-wrap').style.display = 'block';
     $('visitor-output').textContent = d.output;
   } finally {
     setLoading(btn, false);
   }
+}
+
+function showVisitorError(d) {
+  const titles = {
+    grammar:        'Erro na gramática',
+    phrase:         'Erro na frase de input',
+    compile:        'Erro de sintaxe no código do visitor',
+    define:         'Erro ao carregar o visitor',
+    missing_class:  'Classe em falta',
+    runtime:        'Erro durante a execução do visitor',
+  };
+  const title = titles[d.error_kind] || 'Erro';
+  const lines = (d.errors || []).filter(s => s);
+  const html = `
+    <div class="banner error" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span>✕</span><strong>${esc(title)}</strong>
+      </div>
+      <pre style="margin:4px 0 0;font-family:var(--mono);font-size:12px;line-height:1.5;white-space:pre-wrap;color:#7f1d1d">${
+        lines.map(esc).join('\n')
+      }</pre>
+    </div>`;
+  $('visitor-banners').innerHTML = html;
 }
 
 $('btn-run-visitor').addEventListener('click', runVisitor);

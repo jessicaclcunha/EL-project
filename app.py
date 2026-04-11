@@ -1,7 +1,12 @@
 import sys
 import io
 import re
+<<<<<<< HEAD
 import uuid
+=======
+import traceback
+
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 from flask import Flask, render_template, request, jsonify, send_file
 
 sys.path.insert(0, 'src')
@@ -23,11 +28,9 @@ def index():
 @app.route('/api/analyse', methods=['POST'])
 def analyse():
     src = request.get_json().get('grammar', '')
-
     grammar  = parse_grammar(src)
     errors   = get_parse_errors()
     warnings = get_parse_warnings()
-
     if grammar is None:
         return jsonify({'ok': False, 'errors': errors})
 
@@ -57,8 +60,8 @@ def analyse():
 
 @app.route('/api/apply_suggestions', methods=['POST'])
 def apply_suggestions():
-    body        = request.get_json()
-    src         = body.get('grammar', '')
+    body = request.get_json()
+    src  = body.get('grammar', '')
     suggestions = body.get('suggestions', [])
 
     grammar = parse_grammar(src)
@@ -82,31 +85,22 @@ def apply_suggestions():
 
 def rebuild_grammar(src, replacements):
     lines = src.splitlines()
-
     TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*\s*=\s*/")
     RULE_RE  = re.compile(r"^([A-Za-z][A-Za-z0-9_']*)\s*(->|→)")
 
-    rule_lines  = []
-    token_lines = []
-    in_tokens   = False
-
+    rule_lines, token_lines, in_tokens = [], [], False
     for line in lines:
-        stripped = line.strip()
-        if not in_tokens and TOKEN_RE.match(stripped):
+        if not in_tokens and TOKEN_RE.match(line.strip()):
             in_tokens = True
-        if in_tokens:
-            token_lines.append(line)
-        else:
-            rule_lines.append(line)
+        (token_lines if in_tokens else rule_lines).append(line)
 
     blocks = []
     i = 0
     while i < len(rule_lines):
-        line     = rule_lines[i]
-        stripped = line.strip()
-        m = RULE_RE.match(stripped)
+        line = rule_lines[i]
+        m = RULE_RE.match(line.strip())
         if m:
-            nt          = m.group(1)
+            nt = m.group(1)
             block_lines = [line]
             i += 1
             while i < len(rule_lines):
@@ -121,15 +115,22 @@ def rebuild_grammar(src, replacements):
             blocks.append((None, [line]))
             i += 1
 
+<<<<<<< HEAD
     pending  = dict(replacements)
+=======
+    pending = dict(replacements)
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
     out_rules = []
-
     for (nt, block_lines) in blocks:
         if nt is not None and nt in pending:
             out_rules.extend(pending[nt])
             del pending[nt]
+<<<<<<< HEAD
             still_pending = list(pending.keys())
             for new_nt in still_pending:
+=======
+            for new_nt in list(pending.keys()):
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
                 if new_nt.startswith(nt):
                     out_rules.extend(pending[new_nt])
                     del pending[new_nt]
@@ -144,14 +145,12 @@ def rebuild_grammar(src, replacements):
         if result_lines and result_lines[-1].strip():
             result_lines.append('')
         result_lines.extend(token_lines)
-
     return '\n'.join(result_lines)
 
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
     src = request.get_json().get('grammar', '')
-
     grammar = parse_grammar(src)
     if grammar is None:
         return jsonify({'ok': False, 'errors': get_parse_errors()})
@@ -162,27 +161,32 @@ def generate():
     conflicts = check_ll1(grammar, first, follow)
     if conflicts:
         return jsonify({
-            'ok': False,
-            'has_conflicts': True,
-            'errors': [
-                f'A gramática tem {len(conflicts)} conflito(s) LL(1). '
-                f'Aplica as sugestões de correção antes de gerar os parsers.',
-            ],
+            'ok': False, 'has_conflicts': True,
+            'errors': [f'A gramática tem {len(conflicts)} conflito(s) LL(1). Aplica as sugestões antes de gerar os parsers.'],
         })
 
     return jsonify({
         'ok': True,
-        'rd': generate_rd_parser(grammar, first, follow),
-        'td': generate_table_parser(grammar, first, follow),
+        'rd':      generate_rd_parser(grammar, first, follow),
+        'td':      generate_table_parser(grammar, first, follow),
         'visitor': generate_visitor(grammar),
     })
 
 
+def _build_patterns(grammar):
+    patterns = dict(grammar.get_token_patterns())
+    for t in grammar.get_terminals():
+        if t.startswith(("'", '"')):
+            inner = t[1:-1]
+            if inner not in patterns.values():
+                patterns[inner] = re.escape(inner)
+    return patterns
+
+
 @app.route('/api/parse_phrase', methods=['POST'])
 def parse_phrase():
-    body   = request.get_json()
-    src    = body.get('grammar', '')
-    phrase = body.get('phrase', '')
+    body = request.get_json()
+    src, phrase = body.get('grammar', ''), body.get('phrase', '')
 
     grammar = parse_grammar(src)
     if grammar is None:
@@ -191,12 +195,16 @@ def parse_phrase():
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
+<<<<<<< HEAD
     patterns = dict(grammar.get_token_patterns())
     for t in grammar.get_terminals():
         if t.startswith(("'", '"')):
             inner = t[1:-1]
             if inner not in patterns.values():
                 patterns[inner] = re.escape(inner)
+=======
+    patterns = _build_patterns(grammar)
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
     try:
         parser = TableParser(grammar, table, phrase, patterns)
@@ -204,55 +212,115 @@ def parse_phrase():
     except SyntaxError as e:
         return jsonify({'ok': False, 'errors': [str(e)]})
 
-    return jsonify({
-        'ok':      True,
-        'tree_svg': tree_to_svg(tree),
-        'steps':    parser.steps,
-    })
+    return jsonify({'ok': True, 'tree_svg': tree_to_svg(tree), 'steps': parser.steps})
 
 
 @app.route('/api/run_visitor', methods=['POST'])
 def run_visitor():
+<<<<<<< HEAD
     body         = request.get_json()
+=======
+    """Executa o código do visitor personalizado sobre uma frase."""
+    body = request.get_json()
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
     src          = body.get('grammar', '')
     phrase       = body.get('phrase', '')
     visitor_code = body.get('visitor_code', '')
 
+    # 1. Gramática
     grammar = parse_grammar(src)
     if grammar is None:
-        return jsonify({'ok': False, 'errors': get_parse_errors()})
+        return jsonify({'ok': False, 'error_kind': 'grammar', 'errors': get_parse_errors()})
 
     first  = compute_first(grammar)
     follow = compute_follow(grammar, first)
     table  = build_parse_table(grammar, first, follow)
+<<<<<<< HEAD
     patterns = dict(grammar.get_token_patterns())
     for t in grammar.get_terminals():
         if t.startswith(("'", '"')):
             inner = t[1:-1]
             if inner not in patterns.values():
                 patterns[inner] = re.escape(inner)
+=======
+    patterns = _build_patterns(grammar)
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
+    # 2. Frase
     try:
         parser = TableParser(grammar, table, phrase, patterns)
         tree   = parser.parse()
     except SyntaxError as e:
-        return jsonify({'ok': False, 'errors': [f'Erro ao analisar frase: {e}']})
+        return jsonify({
+            'ok': False, 'error_kind': 'phrase',
+            'errors': [f'Erro na frase de input: {e}'],
+        })
 
+    # 3. Compilar o visitor (capta SyntaxError com lineno exato)
+    try:
+        compiled = compile(visitor_code, '<visitor>', 'exec')
+    except SyntaxError as e:
+        line_no = e.lineno or 0
+        line_txt = ''
+        if line_no > 0:
+            lines = visitor_code.splitlines()
+            if 0 < line_no <= len(lines):
+                line_txt = lines[line_no - 1]
+        return jsonify({
+            'ok': False, 'error_kind': 'compile',
+            'errors': [
+                f'Erro de sintaxe no visitor (linha {line_no}): {e.msg}',
+                f'    {line_txt}' if line_txt else '',
+            ],
+            'line': line_no,
+        })
+
+    # 4. Executar a definição
     ns = {}
     try:
-        exec(visitor_code, ns)
+        exec(compiled, ns)
     except Exception as e:
-        return jsonify({'ok': False, 'errors': [f'Erro no código do visitor: {e}']})
+        return jsonify({
+            'ok': False, 'error_kind': 'define',
+            'errors': [f'Erro ao definir o visitor: {type(e).__name__}: {e}'],
+        })
 
     CodeGen = ns.get('CodeGen')
     if CodeGen is None:
-        return jsonify({'ok': False, 'errors': ['Classe CodeGen não encontrada no código.']})
+        return jsonify({
+            'ok': False, 'error_kind': 'missing_class',
+            'errors': [
+                'A classe CodeGen não foi encontrada.',
+                'Confirma que o teu código define `class CodeGen(Visitor):`.',
+            ],
+        })
 
+    # 5. Correr o visitor (filtra traceback para mostrar só o user code)
     try:
         visitor = CodeGen()
         result  = visitor.visit(tree)
     except Exception as e:
-        return jsonify({'ok': False, 'errors': [f'Erro ao executar visitor: {e}']})
+        tb = traceback.extract_tb(e.__traceback__)
+        user_frames = [f for f in tb if f.filename == '<visitor>']
+
+        msgs = [f'{type(e).__name__}: {e}']
+        if user_frames:
+            for f in user_frames:
+                line_txt = ''
+                lines = visitor_code.splitlines()
+                if 0 < f.lineno <= len(lines):
+                    line_txt = lines[f.lineno - 1].strip()
+                msgs.append(f'  em {f.name}() — linha {f.lineno}')
+                if line_txt:
+                    msgs.append(f'    > {line_txt}')
+        else:
+            msgs.append('  (erro fora do código do utilizador)')
+
+        return jsonify({
+            'ok': False, 'error_kind': 'runtime',
+            'errors': msgs,
+            'line': user_frames[-1].lineno if user_frames else None,
+        })
 
     return jsonify({
         'ok':       True,
@@ -264,7 +332,6 @@ def run_visitor():
 @app.route('/api/download/<ptype>', methods=['POST'])
 def download(ptype):
     src = request.get_json().get('grammar', '')
-
     grammar = parse_grammar(src)
     if grammar is None:
         return jsonify({'ok': False, 'errors': get_parse_errors()}), 400
@@ -283,54 +350,36 @@ def download(ptype):
 
     buf = io.BytesIO(code.encode())
     buf.seek(0)
-    return send_file(buf, mimetype='text/plain',
-                     as_attachment=True, download_name=name)
+    return send_file(buf, mimetype='text/plain', as_attachment=True, download_name=name)
 
 
 def is_epsilon(seq):
-    return not seq.symbols or (
-        len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
-    )
+    return not seq.symbols or (len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon())
 
 
 def compute_lookahead(grammar, first, follow):
-    nts    = grammar.get_nonterminals()
+    nts = grammar.get_nonterminals()
     result = []
     for rule in grammar.get_rules():
         nt = rule.get_head_name()
         for seq in rule.altlist.sequences:
-            sf       = first_of_seq(seq.symbols, first, nts)
+            sf = first_of_seq(seq.symbols, first, nts)
             nullable = 'ε' in sf
-            la       = (sf - {'ε'}) | (follow.get(nt, set()) if nullable else set())
+            la = (sf - {'ε'}) | (follow.get(nt, set()) if nullable else set())
             prod_str = 'ε' if is_epsilon(seq) else ' '.join(s.get_value() for s in seq.symbols)
-            result.append({
-                'nt':         nt,
-                'production': f'{nt} → {prod_str}',
-                'lookahead':  sorted(la),
-                'nullable':   nullable,
-            })
+            result.append({'nt': nt, 'production': f'{nt} → {prod_str}',
+                           'lookahead': sorted(la), 'nullable': nullable})
     return result
 
 
 def ser_conflicts(conflicts):
-    return [
-        {'type': c['type'], 'nonterminal': c['nonterminal'],
-         'message': c.get('message', '')}
-        for c in conflicts
-    ]
+    return [{'type': c['type'], 'nonterminal': c['nonterminal'], 'message': c.get('message', '')} for c in conflicts]
 
 
 def ser_suggestions(suggestions):
-    return [
-        {
-            'nonterminal': s['nonterminal'],
-            'technique':   s['technique'],
-            'aplicavel':   s.get('aplicavel', True),
-            'message':     s.get('message', ''),
-            'new_rules':   s['new_rules'],
-        }
-        for s in suggestions
-    ]
+    return [{'nonterminal': s['nonterminal'], 'technique': s['technique'],
+             'aplicavel': s.get('aplicavel', True), 'message': s.get('message', ''),
+             'new_rules': s['new_rules']} for s in suggestions]
 
 
 def ser_table(table, grammar):
@@ -350,6 +399,7 @@ def ser_table(table, grammar):
     return {'terminals': terminals, 'rows': rows}
 
 
+<<<<<<< HEAD
 def _esc(s):
     return (s.replace('&', '&amp;').replace('<', '&lt;')
              .replace('>', '&gt;').replace('"', '&quot;'))
@@ -364,6 +414,8 @@ def _btn_style():
     )
 
 
+=======
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 def tree_to_svg(root):
     class Slot:
         def __init__(self, node, depth):
@@ -404,6 +456,7 @@ def tree_to_svg(root):
 
     n_leaves  = counter[0]
     max_depth = max(s.depth for s in all_slots)
+<<<<<<< HEAD
 
     FONT   = 12     # px — fonte dos labels
     FONT_L = 10     # px — fonte dos lexemas
@@ -415,32 +468,57 @@ def tree_to_svg(root):
 
     W = max(500, int(n_leaves * H_GAP + PAD * 2))
     H = max(200, int((max_depth + 1) * V_GAP + PAD * 2 + 40))
+=======
+    max_x     = max(s.x     for s in all_slots)
+    R, H_GAP, V_GAP, PAD = 20, 68, 82, 44
+    W = max(int((max_x + 1) * H_GAP + PAD * 2), 200)
+    H = max(int((max_depth + 1) * V_GAP + PAD * 2), 100)
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
     def cx(s): return PAD + s.x * H_GAP
     def cy(s): return PAD + s.depth * V_GAP
 
+<<<<<<< HEAD
     NT_F  = '#eef2ff'; NT_S  = '#6366f1'; NT_T  = '#3730a3'
     LF_F  = '#f0fdf4'; LF_S  = '#16a34a'; LF_T  = '#15803d'
     LF_V  = '#c2410c'
     EPS_F = '#f8fafc'; EPS_S = '#94a3b8'; EPS_T = '#64748b'
     EDGE  = '#cbd5e1'
+=======
+    BG, EDGE = '#ffffff', '#d1d5db'
+    NT_F, NT_S, NT_T = '#eef2ff', '#6366f1', '#3730a3'
+    LF_F, LF_S, LF_T = '#f0fdf4', '#16a34a', '#15803d'
+    LF_VAL = '#c2410c'
+    EPS_F, EPS_S, EPS_T = '#f9fafb', '#9ca3af', '#6b7280'
+
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+           f"style=\"background:{BG};font-family:'JetBrains Mono',monospace\">"]
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
     edges = []
     nodes = []
     
     for s in all_slots:
         for c in s.children:
+<<<<<<< HEAD
             edges.append(
                 f'<line x1="{cx(s):.1f}" y1="{cy(s):.1f}" '
                 f'x2="{cx(c):.1f}" y2="{cy(c):.1f}" '
                 f'stroke="{EDGE}" stroke-width="1.8"/>'
             )
+=======
+            out.append(f'<line x1="{cx(s):.1f}" y1="{cy(s):.1f}" x2="{cx(c):.1f}" y2="{cy(c):.1f}" stroke="{EDGE}" stroke-width="1.5"/>')
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
     for s in all_slots:
         x, y    = cx(s), cy(s)
         is_eps  = s.label == 'ε'
         is_leaf = not s.children
+        if is_eps:    fill, stroke, tc = EPS_F, EPS_S, EPS_T
+        elif is_leaf: fill, stroke, tc = LF_F, LF_S, LF_T
+        else:         fill, stroke, tc = NT_F, NT_S, NT_T
 
+<<<<<<< HEAD
         if is_eps:
             fill, stroke, tc = EPS_F, EPS_S, EPS_T
         elif is_leaf:
@@ -470,6 +548,15 @@ def tree_to_svg(root):
                 f'font-family="\'JetBrains Mono\',monospace" fill="{LF_V}">'
                 f'{_esc(s.lexema)}</text>'
             )
+=======
+        out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{R}" fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>')
+        lbl = s.nt if len(s.nt) <= 8 else s.nt[:7] + '…'
+        out.append(f'<text x="{x:.1f}" y="{y:.1f}" dy="0.35em" text-anchor="middle" font-size="9.5" font-weight="500" fill="{tc}">{_esc(lbl)}</text>')
+
+        if is_leaf and s.lexema is not None:
+            val = s.lexema if len(s.lexema) <= 10 else s.lexema[:9] + '…'
+            out.append(f'<text x="{x:.1f}" y="{y + R + 10:.1f}" text-anchor="middle" font-size="9" fill="{LF_VAL}">{_esc(val)}</text>')
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
         tooltip = s.label + (f' = {s.lexema}' if s.lexema else '')
         nodes.append(f'<title>{_esc(tooltip)}</title>')
@@ -478,6 +565,7 @@ def tree_to_svg(root):
 
     uid = uuid.uuid4().hex[:8]
 
+<<<<<<< HEAD
     return f"""<div id="tc{uid}" style="position:relative;border:1px solid #e2e2dc;
 border-radius:6px;background:#fff;overflow:hidden;width:100%;height:460px;user-select:none;">
 
@@ -575,6 +663,10 @@ border-radius:6px;background:#fff;overflow:hidden;width:100%;height:460px;user-s
   }};
 }})();
 </script>"""
+=======
+def _esc(s):
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+>>>>>>> a8cdc940117f4686f867c5259983177935f22f3a
 
 
 if __name__ == '__main__':
