@@ -1,6 +1,6 @@
 start: SQuery
 
-SQuery -> Query ListaIds ListaLinhas
+SQuery -> Query NUM ListaIds SEP ListaLinhas
 
 Query -> SELECT Colunas FROM ID
 
@@ -19,9 +19,10 @@ Coluna -> COLUNANUM | COLUNASTR
 
 SELECT    = /SELECT/
 FROM      = /FROM/
+NUM       = /\d+/
 STAR      = /\*/
 COMMA     = /,/
-ID        = /[a-zA-Z]\w*/
 SEP       = /\|/
 COLUNANUM = /\d+(\.\d+)?/
-COLUNASTR = /[a-zA-Z]\w*/
+COLUNASTR = /'[^']*'/
+ID        = /[a-zA-Z][a-zA-Z0-9_]*/
