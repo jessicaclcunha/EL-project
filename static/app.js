@@ -2,8 +2,8 @@ let ready    = false;
 let grammar  = '';
 let lastSugg = [];
 let visitorSkeleton = '';
+let lastTurtle = '';
 
-// Instância global do editor CodeMirror (iniciada após o DOM estar pronto)
 let visitorEditor = null;
 
 const EXAMPLE = `start: Program
@@ -25,20 +25,13 @@ ASSIGN = /:=/`;
 
 const $ = id => document.getElementById(id);
 
-// ── inicializar CodeMirror ────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const ta = $('visitor-code');
   if (!ta || typeof CodeMirror === 'undefined') return;
-
   visitorEditor = CodeMirror.fromTextArea(ta, {
-    mode:           'python',
-    theme:          'dracula',
-    lineNumbers:    true,
-    indentUnit:     4,
-    tabSize:        4,
-    indentWithTabs: false,
-    lineWrapping:   false,
-    autofocus:      false,
+    mode: 'python', theme: 'dracula', lineNumbers: true,
+    indentUnit: 4, tabSize: 4, indentWithTabs: false,
+    lineWrapping: false, autofocus: false,
     extraKeys: {
       Tab:         cm => cm.execCommand('indentMore'),
       'Shift-Tab': cm => cm.execCommand('indentLess'),
@@ -47,16 +40,12 @@ window.addEventListener('DOMContentLoaded', () => {
   visitorEditor.setSize('100%', '400px');
 });
 
-// Helpers para ler/escrever no editor (com fallback para textarea simples)
 function getVisitorCode() {
   return visitorEditor ? visitorEditor.getValue() : $('visitor-code').value;
 }
 function setVisitorCode(code) {
-  if (visitorEditor) {
-    visitorEditor.setValue(code);
-  } else {
-    $('visitor-code').value = code;
-  }
+  if (visitorEditor) visitorEditor.setValue(code);
+  else $('visitor-code').value = code;
 }
 
 
@@ -70,16 +59,13 @@ function showTab(id) {
 function setLoading(btn, on) {
   if (!btn._lbl) btn._lbl = btn.innerHTML;
   btn.disabled  = on;
-  btn.innerHTML = on ?
-    `<span class="spin"></span>${btn._lbl}` : btn._lbl;
+  btn.innerHTML = on ? `<span class="spin"></span>${btn._lbl}` : btn._lbl;
 }
 
 function showBanners(id, items, type) {
   const icons = { ok: '✓', warn: '⚠', error: '✕' };
   $(id).innerHTML = items
-    .map(m => `<div class="banner ${type}">
-                 <span>${icons[type]}</span><span>${m}</span>
-               </div>`)
+    .map(m => `<div class="banner ${type}"><span>${icons[type]}</span><span>${m}</span></div>`)
     .join('');
 }
 
@@ -158,7 +144,6 @@ $('btn-analyse').addEventListener('click', async () => {
     if (d.conflicts.length > 0) {
       badge.style.display = 'inline';
       badge.textContent   = d.conflicts.length;
-
       $('conf-empty').style.display  = 'none';
       $('conf-result').style.display = 'block';
       $('conf-list').innerHTML = d.conflicts.map(c => `
@@ -189,21 +174,17 @@ $('btn-analyse').addEventListener('click', async () => {
 
     buildTable(d.table);
     showTab('ff');
-
   } finally {
     setLoading(btn, false);
   }
 });
 
-
-// ── aplicar sugestões ─────────────────────────────────────────────────
 $('btn-apply').addEventListener('click', async () => {
   const btn = $('btn-apply');
   setLoading(btn, true);
   try {
     const d = await post('/api/apply_suggestions', {
-      grammar:     $('grammar').value,
-      suggestions: lastSugg,
+      grammar: $('grammar').value, suggestions: lastSugg,
     });
     if (!d.ok) { alert(d.errors.join('\n')); return; }
     $('grammar').value = d.grammar;
@@ -213,17 +194,10 @@ $('btn-apply').addEventListener('click', async () => {
   }
 });
 
-
-// ── tabela LL(1) ──────────────────────────────────────────────────────
 function buildTable({ terminals, rows }) {
   $('table-empty').style.display  = 'none';
   $('table-result').style.display = 'block';
-
-  let html = `<thead><tr>
-    <th>NT \\ T</th>
-    ${terminals.map(t => `<th>${esc(t)}</th>`).join('')}
-  </tr></thead><tbody>`;
-
+  let html = `<thead><tr><th>NT \\ T</th>${terminals.map(t => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>`;
   for (const row of rows) {
     html += `<tr><td class="ll-hd">${esc(row.nt)}</td>`;
     for (const t of terminals) {
@@ -236,8 +210,6 @@ function buildTable({ terminals, rows }) {
   $('ll-table').innerHTML = html + '</tbody>';
 }
 
-
-// ── gerar parsers ─────────────────────────────────────────────────────
 $('btn-generate').addEventListener('click', async () => {
   const btn = $('btn-generate');
   setLoading(btn, true);
@@ -255,7 +227,6 @@ $('btn-generate').addEventListener('click', async () => {
     if (d.visitor) {
       visitorSkeleton = d.visitor;
       setVisitorCode(d.visitor);
-      // refresh necessário quando o CM estava num contentor hidden (display:none)
       if (visitorEditor) setTimeout(() => visitorEditor.refresh(), 50);
       $('visitor-empty').style.display  = 'none';
       $('visitor-result').style.display = 'block';
@@ -267,8 +238,6 @@ $('btn-generate').addEventListener('click', async () => {
   }
 });
 
-
-// ── selector rd / td ──────────────────────────────────────────────────
 document.querySelectorAll('.ps-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('active'));
@@ -290,42 +259,32 @@ async function dlParser(type) {
   a.download = `${type}.py`;
   a.click();
 }
-
 $('btn-dl-rd').addEventListener('click', () => dlParser('rd'));
 $('btn-dl-td').addEventListener('click', () => dlParser('td'));
 
 
-// ── Sub-abas internas (Parsing / Visitor) ─────────────────────────────
-// FIX: usa data-active em vez de borderBottomColor (devolve RGB computado
-// nos browsers, nunca a CSS variable literal — falha cruzada entre browsers)
+// ── Sub-abas ──────────────────────────────────────────────────────────
 function setActiveSubTab(target) {
   document.querySelectorAll('.sub-tab').forEach(b => {
     const active = b.dataset.sub === target;
     b.dataset.active     = active ? 'true' : 'false';
     b.style.color        = active ? 'var(--indigo)' : 'var(--muted)';
-    b.style.borderBottom = active
-      ? '2px solid var(--indigo)'
-      : '2px solid transparent';
+    b.style.borderBottom = active ? '2px solid var(--indigo)' : '2px solid transparent';
   });
-
   document.querySelectorAll('.sub-pane').forEach(p => {
     p.style.display = p.id === `sub-${target}` ? 'block' : 'none';
   });
-
-  // CodeMirror precisa de refresh quando o contentor fica visível
   if (target === 'visitor' && visitorEditor) {
     setTimeout(() => visitorEditor.refresh(), 10);
   }
 }
-
 document.querySelectorAll('.sub-tab').forEach(btn => {
   btn.addEventListener('click', () => setActiveSubTab(btn.dataset.sub));
 });
-
 setActiveSubTab('parsing');
 
 
-// ── Testar frase (sub-aba Parsing) ────────────────────────────────────
+// ── Testar frase ──────────────────────────────────────────────────────
 async function runPhrase() {
   const btn    = $('btn-phrase');
   const phrase = $('phrase-input').value.trim();
@@ -342,23 +301,16 @@ async function runPhrase() {
   setLoading(btn, true);
   try {
     const d = await post('/api/parse_phrase', { grammar, phrase });
-
     if (!d.ok) { showBanners('phrase-banners', d.errors, 'error'); return; }
 
     showBanners('phrase-banners', ['Frase reconhecida com sucesso.'], 'ok');
     $('phrase-empty').style.display  = 'none';
     $('phrase-result').style.display = 'block';
-    const container = $('tree-svg-wrap');
-    container.innerHTML = ''; 
-    const range = document.createRange();
-    range.selectNode(container);
-    const fragment = range.createContextualFragment(d.tree_svg);
-    container.appendChild(fragment);
+    $('tree-svg-wrap').innerHTML     = d.tree_svg;
 
     $('steps-tbody').innerHTML = d.steps.map(s => {
       const cls = s.action === 'ACEITE'           ? 's-ok'
-                : s.action.startsWith('produção')  ? 's-prod'
-                : 's-adv';
+                : s.action.startsWith('produção') ? 's-prod' : 's-adv';
       return `<tr>
         <td>${s.step}</td>
         <td style="font-family:var(--mono);font-size:12px">${(s.stack || []).map(esc).join(' ')}</td>
@@ -366,23 +318,20 @@ async function runPhrase() {
         <td class="${cls}">${esc(s.action)}</td>
       </tr>`;
     }).join('');
-
   } finally {
     setLoading(btn, false);
   }
 }
-
 $('btn-phrase').addEventListener('click', runPhrase);
 $('phrase-input').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  // FIX: data-active é cross-browser seguro; borderBottomColor não é
   const visitorTab    = document.querySelector('.sub-tab[data-sub="visitor"]');
   const visitorActive = visitorTab && visitorTab.dataset.active === 'true';
   if (visitorActive) runVisitor(); else runPhrase();
 });
 
 
-// ── Visitor (sub-aba Visitor) ─────────────────────────────────────────
+// ── Visitor (com melhor feedback de erros) ────────────────────────────
 async function runVisitor() {
   const btn          = $('btn-run-visitor');
   const phrase       = $('phrase-input').value.trim();
@@ -434,30 +383,78 @@ function showVisitorError(d) {
   };
   const title = titles[d.error_kind] || 'Erro';
   const lines = (d.errors || []).filter(s => s);
-  const html = `
+  $('visitor-banners').innerHTML = `
     <div class="banner error" style="flex-direction:column;align-items:flex-start;gap:6px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span>✕</span><strong>${esc(title)}</strong>
-      </div>
+      <div style="display:flex;align-items:center;gap:8px"><span>✕</span><strong>${esc(title)}</strong></div>
       <pre style="margin:4px 0 0;font-family:var(--mono);font-size:12px;line-height:1.5;white-space:pre-wrap;color:#7f1d1d">${
         lines.map(esc).join('\n')
       }</pre>
     </div>`;
-  $('visitor-banners').innerHTML = html;
 }
 
 $('btn-run-visitor').addEventListener('click', runVisitor);
 
-
-// ── Repor esqueleto + download ────────────────────────────────────────
 $('btn-reset-visitor').addEventListener('click', () => {
   if (visitorSkeleton) setVisitorCode(visitorSkeleton);
 });
-
 $('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
 
 
-// ── Tabs principais + exemplo ─────────────────────────────────────────
+// ── Ontologia OWL/RDF ────────────────────────────────────────────────
+if ($('btn-gen-ontology')) {
+
+  $('btn-gen-ontology').addEventListener('click', async () => {
+    const btn  = $('btn-gen-ontology');
+    const name = $('ontology-name').value.trim() || 'GramaticaUtilizador';
+    const src  = $('grammar').value.trim();
+
+    $('ontology-banners').innerHTML = '';
+
+    if (!src) {
+      showBanners('ontology-banners', ['Introduz uma gramática primeiro.'], 'warn');
+      return;
+    }
+
+    setLoading(btn, true);
+    try {
+      const d = await post('/api/ontology', { grammar: src, name });
+      if (!d.ok) {
+        showBanners('ontology-banners', d.errors || ['Erro a gerar ontologia.'], 'error');
+        return;
+      }
+
+      lastTurtle = d.turtle;
+      $('ontology-empty').style.display  = 'none';
+      $('ontology-result').style.display = 'block';
+      $('btn-dl-ontology').disabled = false;
+
+      const lines    = d.turtle.split('\n').length;
+      const triplos  = (d.turtle.match(/^[^#@\s].*\.\s*$/gm) || []).length;
+      $('ontology-stats').textContent =
+        `${lines} linhas · ~${triplos} triplos · gramática "${name}"`;
+
+      $('ontology-code').textContent = d.turtle;
+
+      showBanners('ontology-banners', ['Ontologia gerada com sucesso.'], 'ok');
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+
+  $('btn-dl-ontology').addEventListener('click', () => {
+    if (!lastTurtle) return;
+    const name = $('ontology-name').value.trim() || 'grammar';
+    const blob = new Blob([lastTurtle], { type: 'text/turtle' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `${name}.ttl`;
+    a.click();
+  });
+
+}
+
+
+// ── tabs principais + exemplo ─────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(t =>
   t.addEventListener('click', () => showTab(t.dataset.tab)));
 

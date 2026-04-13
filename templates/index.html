@@ -97,6 +97,7 @@
         <div class="tab" data-tab="table">Tabela LL(1)</div>
         <div class="tab" data-tab="parsers">Parsers</div>
         <div class="tab" data-tab="phrase">Testar frase</div>
+        <div class="tab" data-tab="ontology">Ontologia</div>
       </div>
 
       <!-- FIRST / FOLLOW + Lookahead-->
@@ -349,6 +350,39 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ontologia OWL/RDF -->
+      <div class="panel" id="panel-ontology">
+        <div class="phrase-row" style="margin-bottom:14px;display:flex;gap:8px;align-items:center">
+          <input type="text" id="ontology-name" placeholder="nome da gramática" value=""
+                 style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px">
+          <button class="btn-green" id="btn-gen-ontology">▶ Gerar ontologia</button>
+          <button class="btn-outline" id="btn-dl-ontology" disabled
+                  style="height:36px;font-size:12px">↓ .ttl</button>
+        </div>
+
+        <div class="banners" id="ontology-banners"></div>
+
+        <div id="ontology-empty" class="empty">
+          <svg width="28" height="28" fill="none" stroke="currentColor"
+               stroke-width="1.5" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>
+          </svg>
+          <p>Introduz a gramática à esquerda, escolhe um nome e clica em <strong>▶ Gerar ontologia</strong>.</p>
+        </div>
+
+        <div id="ontology-result" style="display:none">
+          <div class="section">
+            <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span>Ficheiro Turtle gerado</span>
+              <span id="ontology-stats" style="font-weight:400;color:var(--muted);font-size:12px"></span>
+            </div>
+            <pre class="code language-turtle" id="ontology-code"
+                 style="max-height:600px;overflow:auto"></pre>
           </div>
         </div>
       </div>
