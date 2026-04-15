@@ -45,6 +45,36 @@
     .parser-pane { display: none; }
     .parser-pane.active { display: block; }
 
+    /* ── Toggle RD / TD para testar frase ── */
+    .parser-toggle {
+      display: inline-flex;
+      gap: 2px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 3px;
+    }
+    .pt-btn {
+      padding: 0 12px;
+      height: 26px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      cursor: pointer;
+      transition: background .12s, color .12s;
+      font-family: var(--mono);
+      text-transform: uppercase;
+    }
+    .pt-btn.active {
+      background: var(--panel);
+      color: var(--indigo);
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+
     /* ── CodeMirror — editor do visitor ── */
     .cm-editor-wrap {
       border: 1px solid var(--border);
@@ -57,8 +87,102 @@
       font-size: 12.5px;
       line-height: 1.7;
     }
-    /* anula o fundo branco padrão do CM quando o tema é escuro */
     .CodeMirror-scroll { background: transparent; }
+
+    /* ── Visitor store UI ── */
+    .visitor-store {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px 14px;
+    }
+    .visitor-store-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .visitor-save-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .visitor-save-row input {
+      flex: 1;
+      height: 30px;
+      font-size: 12px;
+    }
+    .visitor-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .visitor-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 9px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      cursor: default;
+      transition: border-color .1s;
+    }
+    .visitor-item:hover { border-color: var(--indigo-b); }
+    .visitor-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .visitor-item-load {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--indigo);
+      cursor: pointer;
+      padding: 1px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--indigo-b);
+      background: var(--indigo-l);
+      transition: opacity .1s;
+    }
+    .visitor-item-load:hover { opacity: .8; }
+    .visitor-item-del {
+      font-size: 11px;
+      color: var(--red);
+      cursor: pointer;
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--red-b);
+      background: var(--red-l);
+      transition: opacity .1s;
+    }
+    .visitor-item-del:hover { opacity: .8; }
+    .visitor-store-empty {
+      font-size: 12px;
+      color: var(--dim);
+      text-align: center;
+      padding: 10px 0;
+    }
+
+    /* pill badge for parser type in steps table */
+    .parser-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 99px;
+      letter-spacing: .3px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .parser-badge.rd { background: var(--amber-l); color: var(--amber); border: 1px solid var(--amber-b); }
+    .parser-badge.td { background: var(--indigo-l); color: var(--indigo); border: 1px solid var(--indigo-b); }
   </style>
 </head>
 <body>
@@ -229,10 +353,18 @@
       <!-- Painel unificado: Testar frase + Visitor -->
       <div class="panel" id="panel-phrase">
 
-        <div class="phrase-row" style="margin-bottom:14px">
-          <input type="text" id="phrase-input" placeholder="ex: x := a + 3">
+        <!-- Linha de input: frase + toggle RD/TD + botão analisar -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <input type="text" id="phrase-input" placeholder="ex: x := a + 3"
+                 style="flex:1;min-width:160px">
+          <!-- Toggle RD / TD -->
+          <div class="parser-toggle" title="Escolhe o parser a usar">
+            <button class="pt-btn active" data-pt="td" id="pt-td">TD</button>
+            <button class="pt-btn"        data-pt="rd" id="pt-rd">RD</button>
+          </div>
           <button class="btn-green" id="btn-phrase">▶ Analisar</button>
         </div>
+
         <div class="banners" id="phrase-banners"></div>
 
         <!-- sub-abas -->
@@ -264,11 +396,11 @@
 
           <div id="phrase-result" style="display:none">
             <div class="section">
-              <div class="sec-title">Árvore de derivação</div>
+              <div class="sec-title" id="tree-title">Árvore de derivação</div>
               <div class="tree-svg-wrap" id="tree-svg-wrap"></div>
             </div>
             <div class="section">
-              <div class="sec-title">Passos do parsing</div>
+              <div class="sec-title" id="steps-title">Passos do parsing</div>
               <div class="tbl-wrap">
                 <table>
                   <thead>
@@ -298,21 +430,48 @@
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 
-              <div>
-                <div class="code-header" style="margin-bottom:8px">
-                  <span class="sec-title" style="margin:0">Código do Visitor</span>
-                  <div style="display:flex;gap:6px">
-                    <button class="btn-outline" id="btn-reset-visitor"
-                            style="height:26px;font-size:12px" title="Repor esqueleto original">
-                      ↺ repor
-                    </button>
-                    <button class="btn-outline" id="btn-dl-visitor"
-                            style="height:26px;font-size:12px">↓ .py</button>
+              <!-- coluna esquerda: editor + store -->
+              <div style="display:flex;flex-direction:column;gap:12px">
+
+                <div>
+                  <div class="code-header" style="margin-bottom:8px">
+                    <span class="sec-title" style="margin:0">Código do Visitor</span>
+                    <div style="display:flex;gap:6px">
+                      <button class="btn-outline" id="btn-reset-visitor"
+                              style="height:26px;font-size:12px" title="Repor esqueleto original">
+                        ↺ repor
+                      </button>
+                      <button class="btn-outline" id="btn-dl-visitor"
+                              style="height:26px;font-size:12px">↓ .py</button>
+                    </div>
+                  </div>
+                  <div class="cm-editor-wrap">
+                    <textarea id="visitor-code"></textarea>
                   </div>
                 </div>
-                <div class="cm-editor-wrap">
-                  <textarea id="visitor-code"></textarea>
+
+                <!-- ── Guardar / Carregar visitors ── -->
+                <div class="visitor-store">
+                  <div class="visitor-store-title">
+                    <span>Visitors guardados</span>
+                    <button class="btn-outline" id="btn-refresh-visitors"
+                            style="height:22px;font-size:10px;padding:0 8px"
+                            title="Recarregar lista">↻</button>
+                  </div>
+                  <div class="visitor-save-row">
+                    <input type="text" id="visitor-save-name"
+                           placeholder="nome do visitor (ex: avaliador)"
+                           style="font-size:12px;height:28px">
+                    <button class="btn-indigo" id="btn-save-visitor"
+                            style="height:28px;font-size:12px;padding:0 12px">
+                      Guardar
+                    </button>
+                  </div>
+                  <div class="visitor-list" id="visitor-list">
+                    <div class="visitor-store-empty">Nenhum visitor guardado.</div>
+                  </div>
                 </div>
+
               </div>
 
               <!-- coluna direita: resultado + explicação -->
@@ -347,6 +506,9 @@
                   O Visitor percorre essa árvore chamando <code style="font-family:var(--mono);
                   font-size:12px">visit_NT(node)</code> em cada nó — o resultado é o que o teu
                   código devolver. Podes avaliar expressões, gerar código, construir ASTs, etc.
+                  <br><br>
+                  Usa <strong>Guardar</strong> para preservar visitors que já implementaste e
+                  <strong>carregar</strong> para os reutilizar entre sessões.
                 </div>
               </div>
             </div>

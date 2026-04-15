@@ -3,6 +3,7 @@ let grammar  = '';
 let lastSugg = [];
 let visitorSkeleton = '';
 let lastTurtle = '';
+let activeParserType = 'td';   // 'td' ou 'rd'
 
 let visitorEditor = null;
 
@@ -38,6 +39,9 @@ window.addEventListener('DOMContentLoaded', () => {
     },
   });
   visitorEditor.setSize('100%', '400px');
+
+  // Carregar lista de visitors guardados ao iniciar
+  loadVisitorList();
 });
 
 function getVisitorCode() {
@@ -49,6 +53,7 @@ function setVisitorCode(code) {
 }
 
 
+// ── Tabs principais ───────────────────────────────────────────────────
 function showTab(id) {
   document.querySelectorAll('.tab').forEach(t =>
     t.classList.toggle('active', t.dataset.tab === id));
@@ -56,6 +61,21 @@ function showTab(id) {
     p.classList.toggle('active', p.id === `panel-${id}`));
 }
 
+document.querySelectorAll('.tab').forEach(t =>
+  t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+
+// ── Toggle RD / TD ────────────────────────────────────────────────────
+document.querySelectorAll('.pt-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeParserType = btn.dataset.pt;
+    document.querySelectorAll('.pt-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.pt === activeParserType));
+  });
+});
+
+
+// ── Utilitários ───────────────────────────────────────────────────────
 function setLoading(btn, on) {
   if (!btn._lbl) btn._lbl = btn.innerHTML;
   btn.disabled  = on;
@@ -79,11 +99,12 @@ async function post(url, body) {
 }
 
 function esc(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 
-// ── analisar ──────────────────────────────────────────────────────────
+// ── Analisar ──────────────────────────────────────────────────────────
 $('btn-analyse').addEventListener('click', async () => {
   const btn = $('btn-analyse');
   const src = $('grammar').value.trim();
@@ -300,13 +321,32 @@ async function runPhrase() {
 
   setLoading(btn, true);
   try {
-    const d = await post('/api/parse_phrase', { grammar, phrase });
+    const d = await post('/api/parse_phrase', {
+      grammar,
+      phrase,
+      parser_type: activeParserType,
+    });
+
     if (!d.ok) { showBanners('phrase-banners', d.errors, 'error'); return; }
 
-    showBanners('phrase-banners', ['Frase reconhecida com sucesso.'], 'ok');
+    // Badge a indicar qual parser foi usado
+    const ptLabel = activeParserType === 'rd'
+      ? '<span class="parser-badge rd">RD</span>'
+      : '<span class="parser-badge td">TD</span>';
+
+    showBanners('phrase-banners', [`Frase reconhecida com sucesso.`], 'ok');
+
     $('phrase-empty').style.display  = 'none';
     $('phrase-result').style.display = 'block';
-    $('tree-svg-wrap').innerHTML     = d.tree_svg;
+
+    $('tree-title').innerHTML  = `Árvore de derivação ${ptLabel}`;
+    $('steps-title').innerHTML = `Passos do parsing ${ptLabel}`;
+    const container = $('tree-svg-wrap');
+    container.innerHTML = ''; 
+    const range = document.createRange();
+    range.selectNode(container);
+    const fragment = range.createContextualFragment(d.tree_svg);
+    container.appendChild(fragment);
 
     $('steps-tbody').innerHTML = d.steps.map(s => {
       const cls = s.action === 'ACEITE'           ? 's-ok'
@@ -331,7 +371,7 @@ $('phrase-input').addEventListener('keydown', e => {
 });
 
 
-// ── Visitor (com melhor feedback de erros) ────────────────────────────
+// ── Visitor (execução) ────────────────────────────────────────────────
 async function runVisitor() {
   const btn          = $('btn-run-visitor');
   const phrase       = $('phrase-input').value.trim();
@@ -400,6 +440,69 @@ $('btn-reset-visitor').addEventListener('click', () => {
 $('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
 
 
+// ── Visitor: guardar / carregar ───────────────────────────────────────
+
+async function loadVisitorList() {
+  try {
+    const r = await fetch('/api/visitor/list');
+    const d = await r.json();
+    renderVisitorList(d.visitors || []);
+  } catch (_) {
+    renderVisitorList([]);
+  }
+}
+
+function renderVisitorList(names) {
+  const el = $('visitor-list');
+  if (!names.length) {
+    el.innerHTML = '<div class="visitor-store-empty">Nenhum visitor guardado.</div>';
+    return;
+  }
+  el.innerHTML = names.map(name => `
+    <div class="visitor-item" data-name="${esc(name)}">
+      <span class="visitor-item-name" title="${esc(name)}">${esc(name)}</span>
+      <span class="visitor-item-load" onclick="loadVisitor('${esc(name)}')">carregar</span>
+      <span class="visitor-item-del"  onclick="deleteVisitor('${esc(name)}')">✕</span>
+    </div>`).join('');
+}
+
+async function loadVisitor(name) {
+  const d = await post('/api/visitor/load', { name });
+  if (!d.ok) {
+    showBanners('visitor-banners', d.errors || ['Erro ao carregar.'], 'error');
+    return;
+  }
+  setVisitorCode(d.code);
+  if (visitorEditor) visitorEditor.refresh();
+  showBanners('visitor-banners', [`Visitor "${name}" carregado.`], 'ok');
+}
+
+async function deleteVisitor(name) {
+  if (!confirm(`Eliminar o visitor "${name}"?`)) return;
+  await post('/api/visitor/delete', { name });
+  await loadVisitorList();
+}
+
+$('btn-save-visitor').addEventListener('click', async () => {
+  const name = $('visitor-save-name').value.trim();
+  if (!name) {
+    showBanners('visitor-banners', ['Introduz um nome para guardar.'], 'warn');
+    return;
+  }
+  const code = getVisitorCode();
+  const d = await post('/api/visitor/save', { name, code });
+  if (!d.ok) {
+    showBanners('visitor-banners', d.errors || ['Erro ao guardar.'], 'error');
+    return;
+  }
+  $('visitor-save-name').value = '';
+  showBanners('visitor-banners', [`Visitor "${name}" guardado com sucesso.`], 'ok');
+  await loadVisitorList();
+});
+
+$('btn-refresh-visitors').addEventListener('click', loadVisitorList);
+
+
 // ── Ontologia OWL/RDF ────────────────────────────────────────────────
 if ($('btn-gen-ontology')) {
 
@@ -454,10 +557,7 @@ if ($('btn-gen-ontology')) {
 }
 
 
-// ── tabs principais + exemplo ─────────────────────────────────────────
-document.querySelectorAll('.tab').forEach(t =>
-  t.addEventListener('click', () => showTab(t.dataset.tab)));
-
+// ── Exemplo ───────────────────────────────────────────────────────────
 $('btn-example').addEventListener('click', () => {
   $('grammar').value = EXAMPLE;
 });
