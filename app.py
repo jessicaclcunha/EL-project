@@ -12,7 +12,7 @@ sys.path.insert(0, 'src')
 
 from gp_parser   import parse_grammar, get_parse_errors, get_parse_warnings
 from gp_analysis import *
-from gp_parser_rd import generate_rd_parser
+from gp_parser_rd import *
 from gp_parser_td import generate_table_parser, TableParser
 from gp_visitor   import generate_visitor
 from gp_ontology  import generate_ontology
@@ -254,76 +254,88 @@ def parse_phrase():
 
 
 def _parse_with_rd(grammar, first, follow, phrase, patterns):
-    """
-    Executa o parser recursivo descendente gerado dinamicamente.
-    Devolve (tree, steps) onde steps é uma lista no mesmo formato do TableParser.
-    """
-    rd_code = generate_rd_parser(grammar, first, follow)
-
-    # Substituir o lexer PLY por um simples baseado em regex para evitar conflitos
-    ns = {}
-    exec(compile(rd_code, '<rd_parser>', 'exec'), ns)
-
-    # Tokenizar usando a classe Lexer do td (que usa regex simples)
-    from gp_parser_td import Lexer as SimpleLexer, TreeNode as TDTreeNode
-
-    lex = SimpleLexer(phrase, patterns)
-    tokens = lex.tokens  # lista de (tipo, lexema)
-
-    # Injectar o token stream no namespace gerado
-    ns['token_stream'] = tokens
-    ns['token_pos']    = 0
-    if tokens:
-        ns['actual_tipo'], ns['actual_lex'] = tokens[0]
-    else:
-        ns['actual_tipo'], ns['actual_lex'] = '$', '$'
-
+    nts   = grammar.get_nonterminals()
     start = grammar.get_start()
-    fn    = re.sub(r"[^A-Za-z0-9_]", "_", start.replace("'", "_prime"))
 
-    # Montar estrutura de passos (simplificada para RD — sem stack)
-    steps = []
-    step_counter = [0]
-    original_advance = ns['advance']
+    flat_rules = [
+        (rule.get_head_name(), seq)
+        for rule in grammar.get_rules()
+        for seq in rule.altlist.sequences
+    ]
 
-    def traced_advance():
-        original_advance()
-        step_counter[0] += 1
-        steps.append({
-            'step':   step_counter[0],
-            'stack':  [],
-            'input':  ns['actual_lex'],
-            'action': f'avança: {ns["actual_tipo"]!r}',
-        })
+    lex    = SimpleLexer(phrase, patterns)
+    tokens = lex.tokens 
+    pos    = [0]
+    steps  = []
 
-    ns['advance'] = traced_advance
+    def current():
+        return tokens[pos[0]] if pos[0] < len(tokens) else ('$', '$')
 
-    parse_fn = ns[f'parse_{fn}']
-    tree_rd  = parse_fn()
+    def advance():
+        if pos[0] < len(tokens) - 1:
+            pos[0] += 1
 
-    # Verificar se consumiu tudo
-    if ns['actual_tipo'] != '$':
-        raise SyntaxError(f"Tokens extra após o fim: {ns['actual_tipo']!r}")
+    def rec(t):
+        tipo, lex_val = current()
+        if tipo == t:
+            steps.append({
+                'step':   len(steps) + 1,
+                'stack':  [],
+                'input':  lex_val,
+                'action': f'avança: {t} = {lex_val!r}',
+            })
+            node = TreeNode(t, lexema=lex_val)
+            advance()
+            return node
+        raise SyntaxError(f"Esperado {t!r}, encontrado {tipo!r} ({lex_val!r})")
+
+    def parse_nt(nt):
+        tipo, lex_val = current()
+        for nt_name, seq in flat_rules:
+            if nt_name != nt:
+                continue
+            sf       = first_of_seq(seq.symbols, first, nts)
+            nullable = 'ε' in sf
+            la       = (sf - {'ε'}) | (follow.get(nt, set()) if nullable else set())
+            if tipo not in la:
+                continue
+            steps.append({
+                'step':   len(steps) + 1,
+                'stack':  [],
+                'input':  lex_val,
+                'action': f'produção: {nt} → {repr(seq)}',
+            })
+            is_eps = not seq.symbols or (
+                len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
+            )
+            if is_eps:
+                return TreeNode(nt, children=[TreeNode('ε')])
+            children = []
+            for sym in seq.symbols:
+                if sym.get_is_terminal():
+                    children.append(rec(sym.get_value()))
+                else:
+                    children.append(parse_nt(sym.get_value()))
+            return TreeNode(nt, children=children)
+
+        raise SyntaxError(
+            f"Erro ao expandir {nt!r}: token {tipo!r} inesperado"
+        )
+
+    tree = parse_nt(start)
+    tipo, _ = current()
+    if tipo != '$':
+        raise SyntaxError(f"Tokens extra após o fim: {tipo!r}")
 
     steps.append({
-        'step':   step_counter[0] + 1,
+        'step':   len(steps) + 1,
         'stack':  [],
         'input':  '$',
         'action': 'ACEITE',
     })
-
-    # Converter TreeNode do RD (que usa .lexema) para o mesmo formato do TD
-    def convert(n):
-        from gp_parser_td import TreeNode as TN
-        node = TN(n.label, lexema=n.lexema)
-        for c in n.children:
-            node.children.append(convert(c))
-        return node
-
-    return convert(tree_rd), steps
+    return tree, steps
 
 
-# ── Visitor save / load / delete ─────────────────────────────────────
 
 @app.route('/api/visitor/save', methods=['POST'])
 def visitor_save():
