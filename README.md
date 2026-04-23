@@ -1,4 +1,6 @@
 # Sugestões - Grupo1
 
 - escolher qual parser queremos usar para tesatr frase
-- ter varios visitors para o utilizador depois poder escolher
+- utilizar base de dados para o problema dos varios visitors
+
+- continuar com a nossa ontologia

@@ -1,5 +1,6 @@
 let ready    = false;
 let grammar  = '';
+let grammarHash = '';          // SHA-256 da gramática activa — recebido de /api/analyse
 let lastSugg = [];
 let visitorSkeleton = '';
 let lastTurtle = '';
@@ -39,9 +40,6 @@ window.addEventListener('DOMContentLoaded', () => {
     },
   });
   visitorEditor.setSize('100%', '400px');
-
-  // Carregar lista de visitors guardados ao iniciar
-  loadVisitorList();
 });
 
 function getVisitorCode() {
@@ -113,6 +111,7 @@ $('btn-analyse').addEventListener('click', async () => {
   setLoading(btn, true);
   $('ff-banners').innerHTML = '';
   ready = false;
+  grammarHash = '';
   $('btn-generate').disabled = true;
 
   try {
@@ -128,6 +127,8 @@ $('btn-analyse').addEventListener('click', async () => {
       showTab('ff');
       return;
     }
+
+    grammarHash = d.grammar_hash || '';
 
     const warnings = d.warnings || [];
     if (warnings.length > 0) showBanners('ff-banners', warnings, 'warn');
@@ -194,6 +195,9 @@ $('btn-analyse').addEventListener('click', async () => {
     }
 
     buildTable(d.table);
+
+    if (grammarHash) loadVisitorList();
+
     showTab('ff');
   } finally {
     setLoading(btn, false);
@@ -329,7 +333,6 @@ async function runPhrase() {
 
     if (!d.ok) { showBanners('phrase-banners', d.errors, 'error'); return; }
 
-    // Badge a indicar qual parser foi usado
     const ptLabel = activeParserType === 'rd'
       ? '<span class="parser-badge rd">RD</span>'
       : '<span class="parser-badge td">TD</span>';
@@ -342,7 +345,7 @@ async function runPhrase() {
     $('tree-title').innerHTML  = `Árvore de derivação ${ptLabel}`;
     $('steps-title').innerHTML = `Passos do parsing ${ptLabel}`;
     const container = $('tree-svg-wrap');
-    container.innerHTML = ''; 
+    container.innerHTML = '';
     const range = document.createRange();
     range.selectNode(container);
     const fragment = range.createContextualFragment(d.tree_svg);
@@ -441,10 +444,17 @@ $('btn-dl-visitor').addEventListener('click', () => dlParser('visitor'));
 
 
 // ── Visitor: guardar / carregar ───────────────────────────────────────
+//
+//   Todas as chamadas incluem grammar_hash para filtrar por gramática.
+//   A lista actualiza-se automaticamente quando se analisa uma gramática.
 
 async function loadVisitorList() {
+  if (!grammarHash) {
+    renderVisitorList([]);
+    return;
+  }
   try {
-    const r = await fetch('/api/visitor/list');
+    const r = await fetch(`/api/visitor/list?grammar_hash=${encodeURIComponent(grammarHash)}`);
     const d = await r.json();
     renderVisitorList(d.visitors || []);
   } catch (_) {
@@ -455,7 +465,7 @@ async function loadVisitorList() {
 function renderVisitorList(names) {
   const el = $('visitor-list');
   if (!names.length) {
-    el.innerHTML = '<div class="visitor-store-empty">Nenhum visitor guardado.</div>';
+    el.innerHTML = '<div class="visitor-store-empty">Nenhum visitor guardado para esta gramática.</div>';
     return;
   }
   el.innerHTML = names.map(name => `
@@ -467,7 +477,11 @@ function renderVisitorList(names) {
 }
 
 async function loadVisitor(name) {
-  const d = await post('/api/visitor/load', { name });
+  if (!grammarHash) {
+    showBanners('visitor-banners', ['Analisa a gramática primeiro.'], 'warn');
+    return;
+  }
+  const d = await post('/api/visitor/load', { name, grammar_hash: grammarHash });
   if (!d.ok) {
     showBanners('visitor-banners', d.errors || ['Erro ao carregar.'], 'error');
     return;
@@ -478,8 +492,9 @@ async function loadVisitor(name) {
 }
 
 async function deleteVisitor(name) {
+  if (!grammarHash) return;
   if (!confirm(`Eliminar o visitor "${name}"?`)) return;
-  await post('/api/visitor/delete', { name });
+  await post('/api/visitor/delete', { name, grammar_hash: grammarHash });
   await loadVisitorList();
 }
 
@@ -489,8 +504,12 @@ $('btn-save-visitor').addEventListener('click', async () => {
     showBanners('visitor-banners', ['Introduz um nome para guardar.'], 'warn');
     return;
   }
+  if (!grammarHash) {
+    showBanners('visitor-banners', ['Analisa a gramática primeiro.'], 'warn');
+    return;
+  }
   const code = getVisitorCode();
-  const d = await post('/api/visitor/save', { name, code });
+  const d = await post('/api/visitor/save', { name, code, grammar_hash: grammarHash });
   if (!d.ok) {
     showBanners('visitor-banners', d.errors || ['Erro ao guardar.'], 'error');
     return;
