@@ -1,5 +1,6 @@
 import sys
 import io
+import os
 import traceback
 
 from flask import Flask, render_template, request, jsonify, send_file
@@ -346,6 +347,32 @@ def api_visitor_delete():
     except Exception as e:
         return jsonify({'ok': False, 'errors': [str(e)]})
     return jsonify({'ok': True})
+
+
+
+
+VISITOR_EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'examples', 'visitors')
+
+
+@app.route('/api/visitor/examples', methods=['GET'])
+def api_visitor_examples():
+    """Lista os visitors de exemplo disponíveis na pasta examples/visitors/."""
+    if not os.path.isdir(VISITOR_EXAMPLES_DIR):
+        return jsonify({'ok': True, 'examples': []})
+    result = []
+    for fname in sorted(os.listdir(VISITOR_EXAMPLES_DIR)):
+        if not fname.endswith('.py'):
+            continue
+        path = os.path.join(VISITOR_EXAMPLES_DIR, fname)
+        with open(path, encoding='utf-8') as f:
+            code = f.read()
+        label = fname[:-3]
+        for line in code.splitlines():
+            if line.startswith('# label:'):
+                label = line[len('# label:'):].strip()
+                break
+        result.append({'key': fname[:-3], 'label': label, 'code': code})
+    return jsonify({'ok': True, 'examples': result})
 
 
 

@@ -522,6 +522,44 @@ $('btn-save-visitor').addEventListener('click', async () => {
 $('btn-refresh-visitors').addEventListener('click', loadVisitorList);
 
 
+// ── Visitors de exemplo (carregados do backend) ──────────────────────
+let visitorExamples = [];
+
+async function loadVisitorExamples() {
+  const sel = $('visitor-examples');
+  if (!sel) return;
+  try {
+    const r = await fetch('/api/visitor/examples');
+    const d = await r.json();
+    visitorExamples = d.examples || [];
+    // Limpar opções antigas (manter o placeholder)
+    while (sel.options.length > 1) sel.remove(1);
+    for (const ex of visitorExamples) {
+      const opt = document.createElement('option');
+      opt.value = ex.key;
+      opt.textContent = ex.label;
+      sel.appendChild(opt);
+    }
+  } catch (_) {}
+}
+
+if ($('visitor-examples')) {
+  loadVisitorExamples();
+  $('visitor-examples').addEventListener('change', () => {
+    const sel = $('visitor-examples');
+    const key = sel.value;
+    if (!key) return;
+    const ex = visitorExamples.find(e => e.key === key);
+    if (ex) {
+      setVisitorCode(ex.code);
+      if (visitorEditor) visitorEditor.refresh();
+      showBanners('visitor-banners', [`Exemplo "${ex.label}" carregado.`], 'ok');
+    }
+    sel.value = '';
+  });
+}
+
+
 // ── Ontologia OWL/RDF ────────────────────────────────────────────────
 if ($('btn-gen-ontology')) {
 
