@@ -1,28 +1,44 @@
-"""
-Povoamento da ontologia OWL/RDF do Grammar Playground.
-
-Recebe um SpecNode (gramática parseada) + FIRST/FOLLOW + tabela LL(1) +
-conflitos, e produz um documento Turtle com indivíduos para todas as
-classes definidas em ontology/grammar-playground.ttl:
-    Gramatica, NaoTerminal, Terminal, Start, Epsilon,
-    Producao, Alternativa, SimboloNaPosicao,
-    FirstSet, FollowSet,
-    Conflito (FirstFirst | FirstFollow),
-    Lookahead, ParseTable.
-
-Uso:
-    from gp_ontology import generate_ontology
-    ttl = generate_ontology(grammar, first, follow, table, conflicts,
-                            grammar_name="MinhaGramatica")
-"""
-
 import re
 
 NS = "http://rpcw.di.uminho.pt/2026/grammar-playground/"
 
+# Mapa de caracteres para nomes legíveis em IRIs
+_CHAR_MAP = {
+    '(':  'LPAREN',   ')': 'RPAREN',
+    '[':  'LBRACK',   ']': 'RBRACK',
+    '{':  'LBRACE',   '}': 'RBRACE',
+    '+':  'PLUS',     '-': 'MINUS',
+    '*':  'STAR',     '/': 'SLASH',
+    '=':  'EQ',       ':': 'COLON',
+    ';':  'SEMI',     ',': 'COMMA',
+    '.':  'DOT',      '>': 'GT',
+    '<':  'LT',       '!': 'BANG',
+    '&':  'AMP',      '|': 'PIPE',
+    '?':  'QUEST',    '@': 'AT',
+    '#':  'HASH',     '^': 'CARET',
+    '~':  'TILDE',    '`': 'BACKTICK',
+    '\\': 'BSLASH',   '"': 'DQUOTE',
+    "'":  'SQUOTE',   '%': 'PERCENT',
+    '$':  'DOLLAR',   '_': 'UNDERSCORE',
+    ' ':  'SPACE',
+}
 
-def _safe(name):
-    """Normaliza um nome para usar como local-name num IRI."""
+
+def _safe(name: str) -> str:
+    # Terminal inline delimitado por aspas simples ou duplas
+    if len(name) >= 2 and name[0] in ("'", '"') and name[-1] == name[0]:
+        inner = name[1:-1]
+        parts = []
+        for ch in inner:
+            if ch in _CHAR_MAP:
+                parts.append(_CHAR_MAP[ch])
+            elif ch.isalnum():
+                parts.append(ch.upper())
+            else:
+                parts.append(f"x{ord(ch):02x}")
+        segment = "_".join(parts) if parts else "EMPTY"
+        return f"{segment}"
+
     s = re.sub(r"[^A-Za-z0-9_]", "_", name)
     if s and s[0].isdigit():
         s = "_" + s
@@ -102,8 +118,10 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     for t in terms:
         tid = f":t_{_safe(t)}"
         regex = patterns.get(t)
+        # Para terminais inline, o nome legível é o conteúdo sem aspas
+        display = t[1:-1] if (len(t) >= 2 and t[0] in ("'", '"') and t[-1] == t[0]) else t
         w(f"{tid} a owl:NamedIndividual , :Terminal ;")
-        w(f'    :nome "{_q(t)}"' + (" ;" if regex else " ."))
+        w(f'    :nome "{_q(display)}"' + (" ;" if regex else " ."))
         if regex:
             w(f'    :regex "{_q(regex)}" .')
     w("")
@@ -119,8 +137,6 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
             for m in members:
                 if m == "ε":
                     refs.append(":epsilon")
-                elif m in terms:
-                    refs.append(f":t_{_safe(m)}")
                 else:
                     refs.append(f":t_{_safe(m)}")
             w(f"    ; :firstContem " + " , ".join(refs))
@@ -138,8 +154,6 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
             for m in members:
                 if m == "$":
                     refs.append(":eof")
-                elif m in terms:
-                    refs.append(f":t_{_safe(m)}")
                 else:
                     refs.append(f":t_{_safe(m)}")
             w(f"    ; :followContem " + " , ".join(refs))
@@ -189,10 +203,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
 
             # SimboloNaPosicao (preserva ordem)
             if not is_eps:
-                pos_ids = []
-                for k, sym in enumerate(seq.symbols):
-                    snp = f":snp_{_safe(nt)}_{i}_{k}"
-                    pos_ids.append(snp)
+                pos_ids = [f":snp_{_safe(nt)}_{i}_{k}" for k in range(len(seq.symbols))]
                 if pos_ids:
                     w(f"    ; :naPosicao " + " , ".join(pos_ids))
             w("    .")
