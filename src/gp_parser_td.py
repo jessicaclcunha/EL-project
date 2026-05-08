@@ -16,7 +16,6 @@ def generate_table_parser(grammar, first, follow):
     table         = build_parse_table(grammar, first, follow)
     all_terminals = _collect_terminals(rules, patterns)
 
-    # tokens inline: '[' -> 'LBRACK', ':=' -> 'COLON_EQ', etc.
     inline_tokens = {}
     for t in all_terminals:
         if _is_inline(t):
@@ -29,7 +28,7 @@ def generate_table_parser(grammar, first, follow):
     w('"""')
     w('Parser Top-Down Dirigido por Tabela — gerado pelo Grammar Playground.')
     w('')
-    w('  parsing_table        — tabela LL(1): parsing_table [NT][tipo] = [símbolos]')
+    w('  parsing_table  — tabela LL(1): parsing_table[NT][tipo] = [símbolos]')
     w('  stack          — lista de strings (topo = stack[-1])')
     w('  actual_tipo    — tipo do token actual')
     w('  actual_lex     — lexema do token actual')
@@ -67,7 +66,6 @@ def generate_table_parser(grammar, first, follow):
     w(')')
     w('tokens = ply_tokens')
     w('')
-    # tokens declarados como funções (mais longos primeiro)
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
         w(f'def t_{nome}(t):')
         w(f'    r"{pat}"')
@@ -78,7 +76,6 @@ def generate_table_parser(grammar, first, follow):
         w(f'    r"{re.escape(inner)}"')
         w(f'    return t')
         w('')
-    w('')
     w('t_ignore = " \\t\\n"')
     w('')
     w('def t_error(t):')
@@ -101,10 +98,10 @@ def generate_table_parser(grammar, first, follow):
     w('    return result')
     w('')
 
-    w('# Tabela LL(1) — parsing_table ')
-    w('# parsing_table [NT][tipo] = lista de símbolos do lado direito ([] = ε)')
+    w('# Tabela LL(1)')
+    w('# parsing_table[NT][tipo] = lista de símbolos do lado direito ([] = ε)')
     w('')
-    w('parsing_table  = {')
+    w('parsing_table = {')
 
     by_nt = {}
     for (nt, terminal), seqs in table.items():
@@ -141,7 +138,6 @@ def generate_table_parser(grammar, first, follow):
     w('actual_tipo = None')
     w('actual_lex  = None')
     w('')
-    w('')
     w('def advance():')
     w('    global token_pos, actual_tipo, actual_lex')
     w('    if token_pos < len(token_stream) - 1:')
@@ -149,9 +145,6 @@ def generate_table_parser(grammar, first, follow):
     w('    actual_tipo, actual_lex = token_stream[token_pos]')
     w('')
 
-    w('# parse(source) — algoritmo Top-Down dirigido por tabela')
-    w('')
-    w('')
     w('def parse(source):')
     w('    global token_stream, token_pos, actual_tipo, actual_lex')
     w('    token_stream = tokenizer(source)')
@@ -184,7 +177,6 @@ def generate_table_parser(grammar, first, follow):
     w('                )')
     w('            continue')
     w('')
-    w('        # PRODUÇÃO — consultar parsing_table')
     w('        entradas = parsing_table.get(topo, {})')
     w('        rhs = entradas.get(actual_tipo)')
     w('        if rhs is None:')
@@ -205,7 +197,6 @@ def generate_table_parser(grammar, first, follow):
     w('                stack.append((sym, filho))')
     w('')
 
-    w('')
     w('def main():')
     w('    if len(sys.argv) > 1:')
     w('        with open(sys.argv[1], encoding="utf-8") as f:')
@@ -217,7 +208,6 @@ def generate_table_parser(grammar, first, follow):
     w('        tree.print_tree()')
     w('    except (ValueError, SyntaxError) as e:')
     w('        print(f"Erro: {e}", file=sys.stderr)')
-    w('')
     w('')
     w('if __name__ == "__main__":')
     w('    main()')
@@ -267,19 +257,17 @@ class TreeNode:
 
 
 class TableParser:
-    """
-    Parser LL(1)
-    """
+    """Parser LL(1) dirigido por tabela."""
 
     def __init__(self, grammar, table, source, extra_patterns=None):
         self.nts   = grammar.get_nonterminals()
         self.start = grammar.get_start()
         self.table = table
-        
+
         patterns = dict(grammar.get_token_patterns())
         if extra_patterns:
             patterns.update(extra_patterns)
-            
+
         lex = Lexer(source, patterns)
         self.tokens = lex.tokens
         self.pos    = 0
@@ -289,7 +277,6 @@ class TableParser:
         return self.tokens[self.pos]
 
     def advance(self):
-        # FIX 2: guarda contra avanço para além do fim do stream
         if self.pos < len(self.tokens) - 1:
             self.pos += 1
 
@@ -299,7 +286,6 @@ class TableParser:
         )
 
     def _normalize_terminal(self, val):
-        """Remove aspas de terminais inline para comparação uniforme."""
         if val.startswith(("'", '"')):
             return val[1:-1]
         return val

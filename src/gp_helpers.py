@@ -1,20 +1,48 @@
-"""
-Utilitários partilhados entre app.py e outros módulos.
-
-Inclui:
-  - Normalização de terminais
-  - Construção de padrões léxicos
-  - Serialização de conflitos / sugestões / tabela LL(1) para JSON
-  - Cálculo de lookahead por produção
-  - Reconstrução da gramática após aplicar sugestões
-  - Hash canónico da gramática
-"""
-
 import re
 import hashlib
 
 from gp_analysis import first_of_seq
 
+
+CHAR_MAP = {
+    '(':  'LPAREN',   ')': 'RPAREN',
+    '[':  'LBRACK',   ']': 'RBRACK',
+    '{':  'LBRACE',   '}': 'RBRACE',
+    '+':  'PLUS',     '-': 'MINUS',
+    '*':  'STAR',     '/': 'SLASH',
+    '=':  'EQ',       ':': 'COLON',
+    ';':  'SEMI',     ',': 'COMMA',
+    '.':  'DOT',      '>': 'GT',
+    '<':  'LT',       '!': 'BANG',
+    '&':  'AMP',      '|': 'PIPE',
+    '?':  'QUEST',    '@': 'AT',
+    '#':  'HASH',     '^': 'CARET',
+    '~':  'TILDE',    '%': 'PERCENT',
+    '$':  'DOLLAR',   '_': 'UNDERSCORE',
+    ' ':  'SPACE',    '\\': 'BSLASH',
+    '"':  'DQUOTE',   "'": 'SQUOTE',
+}
+
+
+def inline_token_name(inner: str) -> str:
+    parts = []
+    for ch in inner:
+        if ch in CHAR_MAP:
+            parts.append(CHAR_MAP[ch])
+        elif ch.isalnum():
+            parts.append(ch.upper())
+        else:
+            parts.append(f"x{ord(ch):02x}")
+    return "TOK_" + "_".join(parts) if parts else "TOK_EMPTY"
+
+
+def safe_iri(name: str) -> str:
+    if len(name) >= 2 and name[0] in ("'", '"') and name[-1] == name[0]:
+        return inline_token_name(name[1:-1])
+    s = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if s and s[0].isdigit():
+        s = "_" + s
+    return s or "_"
 
 
 def strip_quotes(t: str) -> str:
@@ -38,7 +66,6 @@ def build_patterns(grammar) -> dict:
     return patterns
 
 
-
 def is_epsilon_seq(seq) -> bool:
     return not seq.symbols or (
         len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
@@ -47,7 +74,6 @@ def is_epsilon_seq(seq) -> bool:
 
 def seq_repr(seq) -> str:
     return 'ε' if is_epsilon_seq(seq) else ' '.join(s.get_value() for s in seq.symbols)
-
 
 
 def compute_lookahead_table(grammar, first, follow) -> list[dict]:
@@ -109,12 +135,10 @@ def ser_table(table, grammar) -> dict:
     return {'terminals': terminals, 'rows': rows}
 
 
-
 def grammar_hash(src: str) -> str:
     """SHA-256 da gramática com whitespace normalizado."""
     normalised = re.sub(r'\s+', ' ', src.strip())
     return hashlib.sha256(normalised.encode()).hexdigest()
-
 
 
 def rebuild_grammar(src: str, replacements: dict) -> str:

@@ -1,5 +1,6 @@
 import re
 from gp_analysis import first_of_seq
+from gp_helpers import inline_token_name
 
 def _collect_terminals(rules, patterns):
     result = list(patterns.keys())
@@ -26,11 +27,6 @@ def _is_epsilon_seq(seq):
 
 
 def _lookahead(seq, nt, first, follow, nts):
-    """
-    lookahead(A -> rhs):
-      se rhs é anulável  ->  first(rhs) - {e}  U  follow(A)
-      caso contrário     ->  first(rhs) - {e}
-    """
     sf = first_of_seq(seq.symbols, first, nts)
     if _is_epsilon_seq(seq) or 'ε' in sf:
         return (sf - {'ε'}) | follow.get(nt, set())
@@ -38,7 +34,6 @@ def _lookahead(seq, nt, first, follow, nts):
 
 
 def _is_inline(val):
-    """Terminal inline, ex. '+', '(' — delimitado por aspas na gramática."""
     return val.startswith(("'", '"'))
 
 
@@ -46,11 +41,16 @@ def _inline_inner(val):
     return val[1:-1]
 
 
-def _inline_ply_name(inner):
-    nome = re.sub(r'[^A-Za-z0-9]', '_', inner).strip('_').upper()
-    if not nome:
-        nome = str(ord(inner[0]))
-    return 'TOK_' + nome 
+def _inline_ply_name(inner: str) -> str:
+    """
+    Delega em inline_token_name() de gp_helpers para consistência
+    com a ontologia e o parser TD.
+
+        '+'  →  TOK_PLUS
+        ','  →  TOK_COMMA
+        ':=' →  TOK_COLON_EQ
+    """
+    return inline_token_name(inner)
 
 
 def generate_rd_parser(grammar, first, follow):
@@ -60,7 +60,6 @@ def generate_rd_parser(grammar, first, follow):
     patterns = grammar.get_token_patterns()
     all_terminals = _collect_terminals(rules, patterns)
 
-    # tokens inline: '[' -> 'LBRACK', ':=' -> 'COLON_EQ', etc.
     inline_tokens = {}
     for t in all_terminals:
         if _is_inline(t):
@@ -111,19 +110,16 @@ def generate_rd_parser(grammar, first, follow):
     w(')')
     w('tokens = ply_tokens')
     w('')
-    # tokens declarados como funções (mais longos primeiro)
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
         w(f'def t_{nome}(t):')
         w(f'    r"{pat}"')
         w(f'    return t')
         w('')
-    # tokens inline como strings (mais longos primeiro)
     for nome_ply, inner in sorted(inline_tokens.items(), key=lambda x: -len(x[1])):
         w(f'def t_{nome_ply}(t):')
         w(f'    r"{re.escape(inner)}"')
         w(f'    return t')
         w('')
-    w('')
     w('t_ignore = " \\t\\n"')
     w('')
     w('def t_error(t):')
@@ -131,7 +127,6 @@ def generate_rd_parser(grammar, first, follow):
     w('')
     w('lexer = lex.lex()')
     w('')
-    # mapa nome PLY -> símbolo original, para devolver '[' em vez de 'LBRACK'
     w('inline_map = {')
     for nome_ply, inner in inline_tokens.items():
         w(f'    "{nome_ply}": "{inner}",')
@@ -161,18 +156,13 @@ def generate_rd_parser(grammar, first, follow):
     w('        token_pos += 1')
     w('    actual_tipo, actual_lex = token_stream[token_pos]')
     w('')
-    w('')
     w('def rec(t):')
-    w('    """Consome o terminal de tipo t. Devolve o lexema. ABORTA se não coincidir."""')
     w('    if actual_tipo == t:')
     w('        lex_val = actual_lex')
     w('        advance()')
     w('        return lex_val')
     w("    raise SyntaxError(f\"Esperado '{t}', encontrado '{actual_tipo}' ('{actual_lex}')\")")
     w('')
-
-    w('')
-    w('# Funções de reconhecimento — uma por não-terminal')
 
     for rule in rules:
         nt   = rule.get_head_name()
@@ -188,8 +178,8 @@ def generate_rd_parser(grammar, first, follow):
         w(f'def parse_{fn}():')
         w(f'    # {nt} -> {rhs_str}')
 
-        first_branch = True
-        eps_seq      = None
+        first_branch  = True
+        eps_seq       = None
         follow_tokens = sorted(follow.get(nt, set()))
 
         for seq in seqs:
@@ -242,7 +232,6 @@ def generate_rd_parser(grammar, first, follow):
                 w(f'        raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
 
     w('')
-    w('')
     w('def parse(source):')
     w('    global token_stream, token_pos, actual_tipo, actual_lex')
     w('    token_stream = tokenizer(source)')
@@ -252,7 +241,6 @@ def generate_rd_parser(grammar, first, follow):
     w('    if actual_tipo != "$":')
     w('        raise SyntaxError(f"Tokens extra após o fim: {actual_tipo}")')
     w('    return tree')
-    w('')
     w('')
     w('def main():')
     w('    if len(sys.argv) > 1:')
@@ -265,7 +253,6 @@ def generate_rd_parser(grammar, first, follow):
     w('        tree.print_tree()')
     w('    except (ValueError, SyntaxError) as e:')
     w('        print(f"Erro: {e}", file=sys.stderr)')
-    w('')
     w('')
     w('if __name__ == "__main__":')
     w('    main()')
