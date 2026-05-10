@@ -3,7 +3,7 @@ from gp_helpers import safe_iri, inline_token_name
 NS = "http://rpcw.di.uminho.pt/2026/grammar-playground/"
 
 
-def q(s: str) -> str:
+def _q(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
@@ -39,7 +39,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     g = "g_" + safe_iri(grammar_name)
     w("### Gramática")
     w(f":{g} a owl:NamedIndividual , :Gramatica ;")
-    w(f'    :nomeGramatica "{q(grammar_name)}" ;')
+    w(f'    :nomeGramatica "{_q(grammar_name)}" ;')
     w(f"    :eLL1 {'true' if is_ll1 else 'false'} ;")
     w(f"    :temStart :{g}_start ;")
     if nts:
@@ -57,7 +57,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
 
     # ── Start ──────────────────────────────────────────────────────────
     w(f":{g}_start a owl:NamedIndividual , :Start ;")
-    w(f'    :nome "{q(start_nt)}" .')
+    w(f'    :nome "{_q(start_nt)}" .')
     w("")
 
     # ── Não-terminais ──────────────────────────────────────────────────
@@ -65,7 +65,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     for nt in nts:
         nid = f":nt_{safe_iri(nt)}"
         w(f"{nid} a owl:NamedIndividual , :NaoTerminal ;")
-        w(f'    :nome "{q(nt)}" ;')
+        w(f'    :nome "{_q(nt)}" ;')
         w(f"    :temFirst :first_{safe_iri(nt)} ;")
         w(f"    :temFollow :follow_{safe_iri(nt)} .")
     w("")
@@ -78,9 +78,9 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
         is_inline = len(t) >= 2 and t[0] in ("'", '"') and t[-1] == t[0]
         display  = t[1:-1] if is_inline else t
         w(f"{tid} a owl:NamedIndividual , :Terminal ;")
-        w(f'    :nome "{q(display)}"' + (" ;" if regex else " ."))
+        w(f'    :nome "{_q(display)}"' + (" ;" if regex else " ."))
         if regex:
-            w(f'    :regex "{q(regex)}" .')
+            w(f'    :regex "{_q(regex)}" .')
     w("")
 
     # ── FIRST sets ─────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
         members = sorted(follow.get(nt, set()))
         w(f"{fid} a owl:NamedIndividual , :FollowSet")
         if members:
-            refs = [":eof" if m == "$" else f":t_{safe_iri(m)}" for m in members]
+            refs = [":fimInput" if m == "$" else f":t_{safe_iri(m)}" for m in members]
             w("    ; :followContem " + " , ".join(refs))
         w("    .")
     w("")
@@ -190,7 +190,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                 idx  += 1
                 lid   = f":la_{idx}"
                 aid   = alt_uri_map.get(id(seq))
-                t_ref = ":eof" if t == "$" else f":t_{safe_iri(t)}"
+                t_ref = ":fimInput" if t == "$" else f":t_{safe_iri(t)}"
                 w(f"{lid} a owl:NamedIndividual , :Lookahead ;")
                 w(f"    :entradaNT :nt_{safe_iri(nt)} ;")
                 w(f"    :entradaT {t_ref} ;")
@@ -207,7 +207,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
             nt    = c.get('nonterminal', '')
 
             w(f"{cid} a owl:NamedIndividual , :{cls} ;")
-            w(f'    :tipoConflito "{q(ctype)}" ;')
+            w(f'    :tipoConflito "{_q(ctype)}" ;')
             w(f"    :conflitoEm :nt_{safe_iri(nt)}")
 
             syms = sorted(c.get('symbols', []))
@@ -215,7 +215,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                 refs = []
                 for s in syms:
                     if s == "$":
-                        refs.append(":eof")
+                        refs.append(":fimInput")
                     elif s == "ε":
                         refs.append(":epsilon")
                     else:
@@ -223,10 +223,5 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                 w("    ; :conflitoSimbolos " + " , ".join(refs))
             w("    .")
         w("")
-
-    # Indivíduo $ (fim de input)
-    w(":eof a owl:NamedIndividual , :Terminal ;")
-    w('    :nome "$" .')
-    w("")
 
     return "\n".join(L)
