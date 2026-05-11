@@ -561,6 +561,23 @@ if ($('visitor-examples')) {
 
 
 // ── Ontologia OWL/RDF ────────────────────────────────────────────────
+
+function setOntoTab(target) {
+  document.querySelectorAll('.onto-tab').forEach(btn => {
+    const active = btn.dataset.onto === target;
+    btn.classList.toggle('active', active);
+    btn.style.color        = active ? 'var(--indigo)' : 'var(--muted)';
+    btn.style.borderBottom = active ? '2px solid var(--indigo)' : '2px solid transparent';
+  });
+  document.querySelectorAll('.onto-pane').forEach(p => {
+    p.style.display = p.id === `onto-${target}` ? 'block' : 'none';
+  });
+}
+
+document.querySelectorAll('.onto-tab').forEach(btn =>
+  btn.addEventListener('click', () => setOntoTab(btn.dataset.onto))
+);
+
 if ($('btn-gen-ontology')) {
 
   $('btn-gen-ontology').addEventListener('click', async () => {
@@ -588,14 +605,18 @@ if ($('btn-gen-ontology')) {
       $('ontology-result').style.display = 'block';
       $('btn-dl-ontology').disabled = false;
 
-      const lines    = d.turtle.split('\n').length;
-      const triplos  = (d.turtle.match(/^[^#@\s].*\.\s*$/gm) || []).length;
+      const lines   = d.turtle.split('\n').length;
+      const triplos = (d.turtle.match(/^[^#@\s].*\.\s*$/gm) || []).length;
       $('ontology-stats').textContent =
         `${lines} linhas · ~${triplos} triplos · gramática "${name}"`;
 
       $('ontology-code').textContent = d.turtle;
-
       showBanners('ontology-banners', ['Ontologia gerada com sucesso.'], 'ok');
+
+      // carregar catálogo se ainda não foi carregado
+      loadSparqlCatalogue();
+
+      setOntoTab('turtle');
     } finally {
       setLoading(btn, false);
     }
@@ -611,6 +632,129 @@ if ($('btn-gen-ontology')) {
     a.click();
   });
 
+}
+
+
+// ── Queries SPARQL ────────────────────────────────────────────────────
+
+let sparqlCatalogue = [];
+
+async function loadSparqlCatalogue() {
+  if (sparqlCatalogue.length) { renderSparqlCatalogue(); return; }
+  try {
+    const r = await fetch('/api/ontology/catalogue');
+    const d = await r.json();
+    sparqlCatalogue = d.queries || [];
+    renderSparqlCatalogue();
+  } catch (_) {}
+}
+
+function renderSparqlCatalogue() {
+  const el = $('sparql-catalogue');
+  if (!el) return;
+  el.innerHTML = sparqlCatalogue.map(q => `
+    <button class="sparql-cat-btn" data-key="${esc(q.key)}"
+            title="${esc(q.description)}"
+            style="text-align:left;padding:6px 10px;height:auto;font-size:12px;
+                   font-weight:500;background:var(--panel);border:1px solid var(--border);
+                   border-radius:4px;color:var(--text);cursor:pointer;
+                   white-space:normal;line-height:1.4;
+                   transition:border-color .1s,background .1s">
+      ${esc(q.label)}
+    </button>`).join('');
+
+  document.querySelectorAll('.sparql-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => runSparqlQuery(btn.dataset.key, ''));
+    btn.addEventListener('mouseenter', () => {
+      btn.style.borderColor = 'var(--indigo-b)';
+      btn.style.background  = 'var(--indigo-l)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.borderColor = 'var(--border)';
+      btn.style.background  = 'var(--panel)';
+    });
+  });
+}
+
+async function runSparqlQuery(key, customSparql) {
+  const src  = $('grammar').value.trim();
+  const name = ($('ontology-name').value || '').trim() || 'GramaticaUtilizador';
+
+  $('sparql-banners').innerHTML    = '';
+  $('sparql-result-empty').style.display = 'none';
+  $('sparql-result-wrap').style.display  = 'none';
+
+  if (!src) {
+    showBanners('sparql-banners', ['Introduz e analisa uma gramática primeiro.'], 'warn');
+    $('sparql-result-empty').style.display = 'flex';
+    return;
+  }
+
+  // mudar para aba SPARQL
+  setOntoTab('sparql');
+  $('ontology-empty').style.display  = 'none';
+  $('ontology-result').style.display = 'block';
+
+  const body = { grammar: src, name };
+  if (key)          body.query_key = key;
+  if (customSparql) body.sparql    = customSparql;
+
+  const d = await post('/api/ontology/query', body);
+
+  if (!d.ok) {
+    showBanners('sparql-banners', d.errors || ['Erro na query.'], 'error');
+    $('sparql-result-empty').style.display = 'flex';
+    return;
+  }
+
+  // actualizar Turtle se vier na resposta
+  if (d.turtle) {
+    lastTurtle = d.turtle;
+    if ($('ontology-code')) $('ontology-code').textContent = d.turtle;
+    if ($('btn-dl-ontology')) $('btn-dl-ontology').disabled = false;
+    const lines   = d.turtle.split('\n').length;
+    const triplos = (d.turtle.match(/^[^#@\s].*\.\s*$/gm) || []).length;
+    if ($('ontology-stats'))
+      $('ontology-stats').textContent =
+        `${lines} linhas · ~${triplos} triplos · gramática "${name}"`;
+  }
+
+  $('sparql-result-title').textContent = d.label || 'Resultado';
+  $('sparql-result-desc').textContent  = d.description || '';
+  $('sparql-result-count').textContent = `${d.rows.length} linha(s)`;
+
+  const labels = d.column_labels || d.columns || [];
+  $('sparql-thead').innerHTML =
+    `<tr>${labels.map(l => `<th>${esc(l)}</th>`).join('')}</tr>`;
+
+  if (!d.rows.length) {
+    $('sparql-tbody').innerHTML = `
+      <tr><td colspan="${labels.length}"
+              style="text-align:center;color:var(--dim);font-size:12px;padding:16px">
+        Sem resultados.
+      </td></tr>`;
+  } else {
+    $('sparql-tbody').innerHTML = d.rows.map(row =>
+      `<tr>${(d.columns || []).map(col => {
+        const v = row[col] || '';
+        if (v === 'true')
+          return `<td style="color:var(--green);font-family:var(--mono);font-size:12px">✓</td>`;
+        if (v === 'false')
+          return `<td style="color:var(--muted);font-family:var(--mono);font-size:12px">—</td>`;
+        return `<td style="font-family:var(--mono);font-size:12px">${esc(v)}</td>`;
+      }).join('')}</tr>`
+    ).join('');
+  }
+
+  $('sparql-result-wrap').style.display = 'block';
+}
+
+if ($('btn-sparql-custom')) {
+  $('btn-sparql-custom').addEventListener('click', () => {
+    const q = ($('sparql-custom').value || '').trim();
+    if (!q) return;
+    runSparqlQuery('', q);
+  });
 }
 
 

@@ -13,6 +13,7 @@ from gp_parser_rd   import generate_rd_parser
 from gp_parser_td   import generate_table_parser, TableParser
 from gp_visitor     import generate_visitor
 from gp_ontology    import generate_ontology
+from gp_sparql      import run_catalogue_query, run_custom_query, get_catalogue_info
 from gp_interpreter import parse_with_rd
 from gp_helpers     import *
 from gp_db  import visitor_save, visitor_list, visitor_load, visitor_delete
@@ -62,9 +63,6 @@ def analyse():
     })
 
 
-
-
-
 @app.route('/api/apply_suggestions', methods=['POST'])
 def apply_suggestions():
     body        = request.get_json()
@@ -87,8 +85,6 @@ def apply_suggestions():
         return jsonify({'ok': False, 'errors': ['Nenhuma sugestão aplicável.']})
 
     return jsonify({'ok': True, 'grammar': rebuild_grammar(src, replacements)})
-
-
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -118,8 +114,6 @@ def generate():
         'td':      generate_table_parser(grammar, first, follow),
         'visitor': generate_visitor(grammar),
     })
-
-
 
 
 @app.route('/api/parse_phrase', methods=['POST'])
@@ -156,8 +150,6 @@ def parse_phrase():
     })
 
 
-
-
 @app.route('/api/download/<ptype>', methods=['POST'])
 def download(ptype):
     src     = request.get_json().get('grammar', '')
@@ -182,7 +174,7 @@ def download(ptype):
     return send_file(buf, mimetype='text/plain', as_attachment=True, download_name=name)
 
 
-
+# ── Ontologia ──────────────────────────────────────────────────────────
 
 @app.route('/api/ontology', methods=['POST'])
 def ontology():
@@ -210,7 +202,57 @@ def ontology():
     return jsonify({'ok': True, 'turtle': ttl, 'triples_estimate': ttl.count('\n')})
 
 
+@app.route('/api/ontology/catalogue', methods=['GET'])
+def ontology_catalogue():
+    """Devolve os metadados das queries pré-definidas."""
+    return jsonify({'ok': True, 'queries': get_catalogue_info()})
 
+
+@app.route('/api/ontology/query', methods=['POST'])
+def ontology_query():
+    """
+    Executa uma query sobre a ontologia gerada.
+    Body: { grammar, name?, query_key? (catálogo) | sparql? (ad-hoc) }
+    """
+    body   = request.get_json()
+    src    = body.get('grammar', '')
+    name   = body.get('name', 'GramaticaUtilizador')
+    key    = body.get('query_key', '')
+    custom = body.get('sparql', '')
+
+    grammar = parse_grammar(src)
+    if grammar is None:
+        return jsonify({'ok': False, 'errors': get_parse_errors()})
+
+    first     = compute_first(grammar)
+    follow    = compute_follow(grammar, first)
+    conflicts = check_ll1(grammar, first, follow)
+    table     = build_parse_table(grammar, first, follow)
+    ttl       = generate_ontology(grammar, first, follow, table, conflicts,
+                                  grammar_name=name)
+
+    if key:
+        result = run_catalogue_query(ttl, key)
+    elif custom:
+        result = run_custom_query(ttl, custom)
+    else:
+        return jsonify({'ok': False, 'errors': ['Fornece query_key ou sparql.']})
+
+    if not result['ok']:
+        return jsonify({'ok': False, 'errors': [result.get('error', 'Erro desconhecido')]})
+
+    return jsonify({
+        'ok':            True,
+        'label':         result.get('label', 'Query ad-hoc'),
+        'description':   result.get('description', ''),
+        'columns':       result.get('columns', []),
+        'column_labels': result.get('column_labels', result.get('columns', [])),
+        'rows':          result['rows'],
+        'turtle':        ttl,
+    })
+
+
+# ── Run visitor ────────────────────────────────────────────────────────
 
 @app.route('/api/run_visitor', methods=['POST'])
 def run_visitor():
@@ -291,7 +333,7 @@ def run_visitor():
     return jsonify({'ok': True, 'output': str(result), 'tree_svg': tree_to_svg(tree)})
 
 
-
+# ── Visitor store ──────────────────────────────────────────────────────
 
 @app.route('/api/visitor/save', methods=['POST'])
 def api_visitor_save():
@@ -349,14 +391,11 @@ def api_visitor_delete():
     return jsonify({'ok': True})
 
 
-
-
 VISITOR_EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'examples', 'visitors')
 
 
 @app.route('/api/visitor/examples', methods=['GET'])
 def api_visitor_examples():
-    """Lista os visitors de exemplo disponíveis na pasta examples/visitors/."""
     if not os.path.isdir(VISITOR_EXAMPLES_DIR):
         return jsonify({'ok': True, 'examples': []})
     result = []
@@ -373,7 +412,6 @@ def api_visitor_examples():
                 break
         result.append({'key': fname[:-3], 'label': label, 'code': code})
     return jsonify({'ok': True, 'examples': result})
-
 
 
 if __name__ == '__main__':

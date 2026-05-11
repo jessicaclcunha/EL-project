@@ -1,4 +1,5 @@
 from gp_helpers import safe_iri, inline_token_name
+from gp_analysis import first_of_seq
 
 NS = "http://rpcw.di.uminho.pt/2026/grammar-playground/"
 
@@ -13,11 +14,19 @@ def _is_eps(seq) -> bool:
     )
 
 
+def _lookahead_for_seq(seq, nt, first_map, follow_map, nts):
+    """Calcula o conjunto lookahead efectivo de uma alternativa."""
+    sf       = first_of_seq(seq.symbols, first_map, nts)
+    nullable = 'ε' in sf
+    la       = (sf - {'ε'}) | (follow_map.get(nt, set()) if nullable else set())
+    return la, nullable
+
+
 def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                       grammar_name="GramaticaUtilizador"):
-    """Gera Turtle com instâncias da ontologia para esta gramática."""
     conflicts = conflicts or []
-    nts       = sorted(grammar.get_nonterminals())
+    nts_set   = grammar.get_nonterminals()
+    nts       = sorted(nts_set)
     terms     = sorted(grammar.get_terminals())
     patterns  = grammar.get_token_patterns()
     start_nt  = grammar.get_start()
@@ -56,7 +65,9 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     w("")
 
     # ── Start ──────────────────────────────────────────────────────────
-    w(f":{g}_start a owl:NamedIndividual , :Start ;")
+    # FIX: instanciado explicitamente como :Start E :NaoTerminal
+    w(f"### Axioma (símbolo inicial)")
+    w(f":{g}_start a owl:NamedIndividual , :Start , :NaoTerminal ;")
     w(f'    :nome "{_q(start_nt)}" .')
     w("")
 
@@ -64,7 +75,8 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     w("### Não-terminais")
     for nt in nts:
         nid = f":nt_{safe_iri(nt)}"
-        w(f"{nid} a owl:NamedIndividual , :NaoTerminal ;")
+        cls = ":Start , :NaoTerminal" if nt == start_nt else ":NaoTerminal"
+        w(f"{nid} a owl:NamedIndividual , {cls} ;")
         w(f'    :nome "{_q(nt)}" ;')
         w(f"    :temFirst :first_{safe_iri(nt)} ;")
         w(f"    :temFollow :follow_{safe_iri(nt)} .")
@@ -73,10 +85,10 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     # ── Terminais ──────────────────────────────────────────────────────
     w("### Terminais")
     for t in terms:
-        tid      = f":t_{safe_iri(t)}"
-        regex    = patterns.get(t)
+        tid       = f":t_{safe_iri(t)}"
+        regex     = patterns.get(t)
         is_inline = len(t) >= 2 and t[0] in ("'", '"') and t[-1] == t[0]
-        display  = t[1:-1] if is_inline else t
+        display   = t[1:-1] if is_inline else t
         w(f"{tid} a owl:NamedIndividual , :Terminal ;")
         w(f'    :nome "{_q(display)}"' + (" ;" if regex else " ."))
         if regex:
@@ -108,9 +120,8 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     w("")
 
     # ── Produções, alternativas, símbolos posicionados ─────────────────
-    w("### Produções")
-    nts_set     = set(nts)
-    alt_uri_map = {}
+    w("### Produções e Alternativas")
+    alt_uri_map = {}  # id(seq) → URI string (sem ':')
 
     for rule in grammar.get_rules():
         nt   = rule.get_head_name()
@@ -131,27 +142,34 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
         for i, seq in enumerate(seqs, start=1):
             aid    = f":alt_{safe_iri(nt)}_{i}"
             is_eps = _is_eps(seq)
+
+            la_set, nullable = _lookahead_for_seq(seq, nt, first, follow, nts_set)
+            la_str = ", ".join(sorted(la_set))
+
             w(f"{aid} a owl:NamedIndividual , :Alternativa ;")
-            w(f"    :eNulo {'true' if is_eps else 'false'}")
+            w(f"    :eNulo {'true' if is_eps else 'false'} ;")
+            w(f'    :lookahead "{_q(la_str)}"')
 
             if not is_eps:
-                refs = []
-                for sym in seq.symbols:
+                sym_refs = []
+                pos_ids  = []
+                for k, sym in enumerate(seq.symbols):
                     v = sym.get_value()
                     if sym.get_is_epsilon():
-                        refs.append(":epsilon")
+                        ref = ":epsilon"
                     elif v in nts_set:
-                        refs.append(f":nt_{safe_iri(v)}")
+                        ref = f":nt_{safe_iri(v)}"
                     else:
-                        refs.append(f":t_{safe_iri(v)}")
-                if refs:
-                    w("    ; :contemSimbolo " + " , ".join(refs))
+                        ref = f":t_{safe_iri(v)}"
+                    sym_refs.append(ref)
+                    pos_ids.append(f":snp_{safe_iri(nt)}_{i}_{k}")
 
-                pos_ids = [f":snp_{safe_iri(nt)}_{i}_{k}" for k in range(len(seq.symbols))]
-                w("    ; :naPosicao " + " , ".join(pos_ids))
+                w("    ; :contemSimbolo " + " , ".join(sym_refs))
+                w("    ; :naPosicao "     + " , ".join(pos_ids))
 
             w("    .")
 
+            # SimboloNaPosicao
             if not is_eps:
                 for k, sym in enumerate(seq.symbols):
                     snp = f":snp_{safe_iri(nt)}_{i}_{k}"
@@ -163,7 +181,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                     else:
                         ref = f":t_{safe_iri(v)}"
                     w(f"{snp} a owl:NamedIndividual , :SimboloNaPosicao ;")
-                    w(f'    :posicao "{k}"^^xsd:nonNegativeInteger ;')
+                    w(f'    :posicao {k} ;')
                     w(f"    :posicaoSimbolo {ref} .")
             w("")
 
@@ -173,7 +191,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
         pt     = f":pt_{g}"
         la_ids = []
         idx    = 0
-        for seqs in table.values():
+        for (nt, t), seqs in table.items():
             for _ in seqs:
                 idx += 1
                 la_ids.append(f":la_{idx}")
@@ -193,8 +211,10 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
                 t_ref = ":fimInput" if t == "$" else f":t_{safe_iri(t)}"
                 w(f"{lid} a owl:NamedIndividual , :Lookahead ;")
                 w(f"    :entradaNT :nt_{safe_iri(nt)} ;")
-                w(f"    :entradaT {t_ref} ;")
-                w(f"    :entradaAlternativa {aid} ." if aid else "    .")
+                w(f"    :entradaT {t_ref}")
+                if aid:
+                    w(f"    ; :entradaAlternativa {aid}")
+                w("    .")
         w("")
 
     # ── Conflitos ──────────────────────────────────────────────────────
@@ -210,16 +230,28 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
             w(f'    :tipoConflito "{_q(ctype)}" ;')
             w(f"    :conflitoEm :nt_{safe_iri(nt)}")
 
+            # FIX: ligar TODAS as alternativas envolvidas no conflito
+            alts_text = c.get('alts', ())
+            rule = next(
+                (r for r in grammar.get_rules() if r.get_head_name() == nt),
+                None
+            )
+            if rule:
+                alt_refs = []
+                for j, seq in enumerate(rule.altlist.sequences, start=1):
+                    seq_repr = repr(seq)
+                    if seq_repr in alts_text:
+                        alt_refs.append(f":alt_{safe_iri(nt)}_{j}")
+                if alt_refs:
+                    w("    ; :conflitoAlternativa " + " , ".join(alt_refs))
+
             syms = sorted(c.get('symbols', []))
             if syms:
                 refs = []
                 for s in syms:
-                    if s == "$":
-                        refs.append(":fimInput")
-                    elif s == "ε":
-                        refs.append(":epsilon")
-                    else:
-                        refs.append(f":t_{safe_iri(s)}")
+                    if s == "$":   refs.append(":fimInput")
+                    elif s == "ε": refs.append(":epsilon")
+                    else:          refs.append(f":t_{safe_iri(s)}")
                 w("    ; :conflitoSimbolos " + " , ".join(refs))
             w("    .")
         w("")
