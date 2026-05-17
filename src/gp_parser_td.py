@@ -1,9 +1,9 @@
 import re
 from gp_analysis import build_parse_table
+from gp_helpers  import is_epsilon_seq
 
 from gp_parser_rd import (
-    _collect_terminals, _nt_func, _is_epsilon_seq,
-    _is_inline, _inline_inner, _inline_ply_name,
+    _collect_terminals, _nt_func, _is_inline, _inline_inner, _inline_ply_name,
 )
 
 
@@ -58,13 +58,12 @@ def generate_table_parser(grammar, first, follow):
     w('')
     w('import ply.lex as lex')
     w('')
-    w('ply_tokens = (')
+    w('tokens = (')
     for nome in patterns:
         w(f"    '{nome}',")
     for nome_ply in inline_tokens:
         w(f"    '{nome_ply}',")
     w(')')
-    w('tokens = ply_tokens')
     w('')
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
         w(f'def t_{nome}(t):')
@@ -115,7 +114,7 @@ def generate_table_parser(grammar, first, follow):
         w(f'    "{nt}": {{')
         for tipo in sorted(by_nt[nt]):
             seq = by_nt[nt][tipo]
-            if _is_epsilon_seq(seq):
+            if is_epsilon_seq(seq):  # ← was _is_epsilon_seq(seq)
                 rhs = []
             else:
                 rhs = [
@@ -219,24 +218,33 @@ def generate_table_parser(grammar, first, follow):
 class Lexer:
     """Tokenizador parametrizado pelos padrões da gramática."""
 
-    def __init__(self, source, token_patterns):
-        self.tokens = []
-        pos = 0
+    def __init__(self, source: str, token_patterns: dict):
+        self.tokens: list[tuple[str, str]] = []
+        pos  = 0
         line = 1
-        token_spec = list(token_patterns.items())
+        spec = list(token_patterns.items())
+
         while pos < len(source):
-            if re.match(r'[ \t]', source[pos]):
+            ch = source[pos]
+            if ch in (' ', '\t'):
                 pos += 1; continue
-            if source[pos] == '\n':
+            if ch == '\n':
                 line += 1; pos += 1; continue
+
             matched = False
-            for name, pat in token_spec:
+            for name, pat in spec:
                 m = re.match(pat, source[pos:])
                 if m:
                     self.tokens.append((name, m.group()))
-                    pos += m.end(); matched = True; break
+                    pos += m.end()
+                    matched = True
+                    break
+
             if not matched:
-                raise SyntaxError(f"Linha {line}: carácter inesperado {source[pos]!r}")
+                raise SyntaxError(
+                    f"Linha {line}: carácter inesperado {source[pos]!r}"
+                )
+
         self.tokens.append(('$', '$'))
 
 
@@ -279,11 +287,6 @@ class TableParser:
     def advance(self):
         if self.pos < len(self.tokens) - 1:
             self.pos += 1
-
-    def _is_eps(self, seq):
-        return not seq.symbols or (
-            len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
-        )
 
     def _normalize_terminal(self, val):
         if val.startswith(("'", '"')):
@@ -346,7 +349,7 @@ class TableParser:
             self.steps[-1]['action'] = f'produção: {topo} -> {repr(seq)}'
 
             stack.pop()
-            if self._is_eps(seq):
+            if is_epsilon_seq(seq):  # ← was self._is_eps(seq)
                 if topo_no is not None:
                     topo_no.children.append(TreeNode('ε'))
             else:

@@ -42,14 +42,6 @@ def _inline_inner(val):
 
 
 def _inline_ply_name(inner: str) -> str:
-    """
-    Delega em inline_token_name() de gp_helpers para consistência
-    com a ontologia e o parser TD.
-
-        '+'  →  TOK_PLUS
-        ','  →  TOK_COMMA
-        ':=' →  TOK_COLON_EQ
-    """
     return inline_token_name(inner)
 
 
@@ -81,8 +73,7 @@ def generate_rd_parser(grammar, first, follow):
     w('import sys')
     w('')
 
-    w('# Árvore de derivação')
-    w('')
+    # ── TreeNode ──────────────────────────────────────────────────────
     w('class TreeNode:')
     w('    def __init__(self, label, children=None, lexema=None):')
     w('        self.label    = label       # nome do NT ou tipo do terminal')
@@ -98,17 +89,15 @@ def generate_rd_parser(grammar, first, follow):
     w('            child.print_tree(prefix + ext, last=(i == len(self.children) - 1))')
     w('')
 
-    w('# LEXER')
-    w('')
+    # ── LEXER (PLY — idêntico ao original) ───────────────────────────
     w('import ply.lex as lex')
     w('')
-    w('ply_tokens = (')
+    w('tokens = (')
     for nome in patterns:
         w(f"    '{nome}',")
     for nome_ply in inline_tokens:
         w(f"    '{nome_ply}',")
     w(')')
-    w('tokens = ply_tokens')
     w('')
     for nome, pat in sorted(patterns.items(), key=lambda x: -len(x[1])):
         w(f'def t_{nome}(t):')
@@ -142,6 +131,7 @@ def generate_rd_parser(grammar, first, follow):
     w('    return result')
     w('')
 
+    # ── Estado global (interface legada) ─────────────────────────────
     w('')
     w('')
     w('token_stream = [] ')
@@ -164,6 +154,7 @@ def generate_rd_parser(grammar, first, follow):
     w("    raise SyntaxError(f\"Esperado '{t}', encontrado '{actual_tipo}' ('{actual_lex}')\")")
     w('')
 
+    # ── Funções parse_NT (interface legada com globais) ───────────────
     for rule in rules:
         nt   = rule.get_head_name()
         seqs = rule.altlist.sequences
@@ -231,6 +222,7 @@ def generate_rd_parser(grammar, first, follow):
                 w(f'    else:')
                 w(f'        raise SyntaxError(f"Erro em {nt}: token inesperado {{actual_tipo}}")')
 
+    # ── Função parse() global (interface legada) ──────────────────────
     w('')
     w('def parse(source):')
     w('    global token_stream, token_pos, actual_tipo, actual_lex')
@@ -242,6 +234,45 @@ def generate_rd_parser(grammar, first, follow):
     w('        raise SyntaxError(f"Tokens extra após o fim: {actual_tipo}")')
     w('    return tree')
     w('')
+
+    # ── Classe Lexer ──────────────────────────────────────────────────
+    # Envolve o tokenizer PLY já gerado acima numa classe com interface
+    # Lexer(source).tokens — usada por gp_interpreter.
+    w('')
+    w('class Lexer:')
+    w('    """Wrapper do tokenizer PLY. Lexer(source).tokens devolve lista de (tipo, lexema)."""')
+    w('    def __init__(self, source):')
+    w('        self.tokens = tokenizer(source)')
+    w('')
+
+    # ── Classe Parser ─────────────────────────────────────────────────
+    # Encapsula o estado global num objecto para que múltiplas instâncias
+    # possam coexistir (necessário para gp_interpreter).
+    w('')
+    w('class Parser:')
+    w('    """Parser recursivo descendente. Parser(tokens).parse() → TreeNode."""')
+    w('')
+    w('    def __init__(self, tokens):')
+    w('        self._tokens = tokens')
+    w('        self._pos    = 0')
+    w('        self.sync_globals()')
+    w('')
+    w('    def sync_globals(self):')
+    w('        global token_stream, token_pos, actual_tipo, actual_lex')
+    w('        token_stream = self._tokens')
+    w('        token_pos    = self._pos')
+    w('        if token_stream:')
+    w('            actual_tipo, actual_lex = token_stream[token_pos]')
+    w('')
+    w('    def parse(self):')
+    w('        self.sync_globals()')
+    w(f'        tree = parse_{_nt_func(start)}()')
+    w('        global actual_tipo')
+    w('        if actual_tipo != "$":')
+    w('            raise SyntaxError(f"Tokens extra após o fim: {actual_tipo}")')
+    w('        return tree')
+    w('')
+
     w('def main():')
     w('    if len(sys.argv) > 1:')
     w('        with open(sys.argv[1], encoding="utf-8") as f:')

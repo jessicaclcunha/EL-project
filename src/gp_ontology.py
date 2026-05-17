@@ -1,4 +1,4 @@
-from gp_helpers import safe_iri, inline_token_name
+from gp_helpers import safe_iri, inline_token_name, is_epsilon_seq
 from gp_analysis import first_of_seq
 
 NS = "http://rpcw.di.uminho.pt/2026/grammar-playground/"
@@ -6,12 +6,6 @@ NS = "http://rpcw.di.uminho.pt/2026/grammar-playground/"
 
 def _q(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def _is_eps(seq) -> bool:
-    return not seq.symbols or (
-        len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon()
-    )
 
 
 def _lookahead_for_seq(seq, nt, first_map, follow_map, nts):
@@ -65,7 +59,6 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
     w("")
 
     # ── Start ──────────────────────────────────────────────────────────
-    # FIX: instanciado explicitamente como :Start E :NaoTerminal
     w(f"### Axioma (símbolo inicial)")
     w(f":{g}_start a owl:NamedIndividual , :Start , :NaoTerminal ;")
     w(f'    :nome "{_q(start_nt)}" .')
@@ -121,7 +114,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
 
     # ── Produções, alternativas, símbolos posicionados ─────────────────
     w("### Produções e Alternativas")
-    alt_uri_map = {}  # id(seq) → URI string (sem ':')
+    alt_uri_map = {}
 
     for rule in grammar.get_rules():
         nt   = rule.get_head_name()
@@ -141,7 +134,7 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
 
         for i, seq in enumerate(seqs, start=1):
             aid    = f":alt_{safe_iri(nt)}_{i}"
-            is_eps = _is_eps(seq)
+            is_eps = is_epsilon_seq(seq)  # ← was _is_eps(seq)
 
             la_set, nullable = _lookahead_for_seq(seq, nt, first, follow, nts_set)
             la_str = ", ".join(sorted(la_set))
@@ -230,7 +223,6 @@ def generate_ontology(grammar, first, follow, table=None, conflicts=None,
             w(f'    :tipoConflito "{_q(ctype)}" ;')
             w(f"    :conflitoEm :nt_{safe_iri(nt)}")
 
-            # FIX: ligar TODAS as alternativas envolvidas no conflito
             alts_text = c.get('alts', ())
             rule = next(
                 (r for r in grammar.get_rules() if r.get_head_name() == nt),

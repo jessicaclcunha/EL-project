@@ -568,7 +568,14 @@
             <div class="section">
               <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between">
                 <span>Ficheiro Turtle gerado</span>
-                <span id="ontology-stats" style="font-weight:400;color:var(--muted);font-size:12px"></span>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span id="ontology-stats" style="font-weight:400;color:var(--muted);font-size:12px"></span>
+                  <button class="btn-indigo" id="btn-suggest-visitor"
+                          style="height:26px;font-size:12px;padding:0 12px"
+                          title="Gera o esqueleto do Visitor a partir da ontologia e pré-preenche o editor">
+                    ✦ Sugerir visitor
+                  </button>
+                </div>
               </div>
               <pre class="code language-turtle" id="ontology-code"
                    style="max-height:600px;overflow:auto"></pre>

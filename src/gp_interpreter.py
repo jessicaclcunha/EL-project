@@ -1,126 +1,67 @@
-import re
+"""
+gp_interpreter.py — Interpreta frases usando os parsers gerados.
 
-from gp_analysis import first_of_seq
-from gp_helpers  import strip_quotes, is_epsilon_seq
+parse_with_rd() usa o código produzido por generate_rd_parser(),
+executado num namespace isolado. A assinatura pública é idêntica
+à anterior para não quebrar app.py.
+"""
 
-
-
-class SimpleLexer:
-    """Tokenizador inline — recebe {tipo: regex} e devolve lista de (tipo, lexema)."""
-
-    def __init__(self, source: str, token_patterns: dict):
-        self.tokens: list[tuple[str, str]] = []
-        pos  = 0
-        line = 1
-        spec = list(token_patterns.items())
-
-        while pos < len(source):
-            ch = source[pos]
-            if ch in (' ', '\t'):
-                pos += 1; continue
-            if ch == '\n':
-                line += 1; pos += 1; continue
-
-            matched = False
-            for name, pat in spec:
-                m = re.match(pat, source[pos:])
-                if m:
-                    self.tokens.append((name, m.group()))
-                    pos += m.end()
-                    matched = True
-                    break
-
-            if not matched:
-                raise SyntaxError(
-                    f"Linha {line}: carácter inesperado {source[pos]!r}"
-                )
-
-        self.tokens.append(('$', '$'))
+from gp_parser_rd import generate_rd_parser
 
 
-class TreeNode:
-    def __init__(self, label: str, children=None, lexema=None):
-        self.label    = label
-        self.children = children or []
-        self.lexema   = lexema
+def steps_from_tree(tree, steps=None, counter=None):
+    """Percorre a árvore gerada e reconstrói a lista de passos para a UI."""
+    if steps is None:
+        steps = []
+    if counter is None:
+        counter = [0]
+
+    if tree.lexema is not None:
+        counter[0] += 1
+        steps.append({
+            'step':   counter[0],
+            'stack':  [],
+            'input':  tree.lexema,
+            'action': f'avança: {tree.label} = {tree.lexema!r}',
+        })
+    elif tree.label == 'ε':
+        counter[0] += 1
+        steps.append({
+            'step':   counter[0],
+            'stack':  [],
+            'input':  'ε',
+            'action': 'ε (produção vazia)',
+        })
+    else:
+        children_labels = ' '.join(
+            c.label for c in tree.children
+        )
+        counter[0] += 1
+        steps.append({
+            'step':   counter[0],
+            'stack':  [],
+            'input':  '',
+            'action': f'produção: {tree.label} → {children_labels}',
+        })
+        for child in tree.children:
+            steps_from_tree(child, steps, counter)
+    return steps
 
 
 def parse_with_rd(grammar, first, follow, phrase: str, patterns: dict):
-    nts   = grammar.get_nonterminals()
-    start = grammar.get_start()
+    rd_code = generate_rd_parser(grammar, first, follow)
 
-    # (nt, seq) para todas as alternativas de todas as regras
-    flat_rules = [
-        (rule.get_head_name(), seq)
-        for rule in grammar.get_rules()
-        for seq in rule.altlist.sequences
-    ]
+    # Executar o código gerado num namespace isolado
+    ns = {}
+    exec(compile(rd_code, '<rd_parser>', 'exec'), ns)
 
-    tokens = SimpleLexer(phrase, patterns).tokens
-    pos    = [0]
-    steps  = []
+    # Tokenizar e parsear com as classes geradas
+    lex    = ns['Lexer'](phrase)
+    parser = ns['Parser'](lex.tokens)
+    tree   = parser.parse()
 
-    def current():
-        return tokens[pos[0]] if pos[0] < len(tokens) else ('$', '$')
-
-    def advance():
-        if pos[0] < len(tokens) - 1:
-            pos[0] += 1
-
-    def rec(t: str) -> TreeNode:
-        """Consome o terminal t (pode vir com aspas da gramática)."""
-        t_norm         = strip_quotes(t)
-        tipo, lex_val  = current()
-        if tipo == t_norm:
-            steps.append({
-                'step':   len(steps) + 1,
-                'stack':  [],
-                'input':  lex_val,
-                'action': f'avança: {t_norm} = {lex_val!r}',
-            })
-            node = TreeNode(t_norm, lexema=lex_val)
-            advance()
-            return node
-        raise SyntaxError(f"Esperado {t_norm!r}, encontrado {tipo!r} ({lex_val!r})")
-
-    def parse_nt(nt: str) -> TreeNode:
-        tipo, lex_val = current()
-        for nt_name, seq in flat_rules:
-            if nt_name != nt:
-                continue
-            sf       = first_of_seq(seq.symbols, first, nts)
-            nullable = 'ε' in sf
-            la       = (sf - {'ε'}) | (follow.get(nt, set()) if nullable else set())
-            la_norm  = {strip_quotes(x) for x in la}
-
-            if tipo not in la_norm:
-                continue
-
-            steps.append({
-                'step':   len(steps) + 1,
-                'stack':  [],
-                'input':  lex_val,
-                'action': f'produção: {nt} → {repr(seq)}',
-            })
-
-            if is_epsilon_seq(seq):
-                return TreeNode(nt, children=[TreeNode('ε')])
-
-            children = []
-            for sym in seq.symbols:
-                if sym.get_is_terminal():
-                    children.append(rec(sym.get_value()))
-                else:
-                    children.append(parse_nt(sym.get_value()))
-            return TreeNode(nt, children=children)
-
-        raise SyntaxError(f"Erro ao expandir {nt!r}: token {tipo!r} inesperado")
-
-    tree = parse_nt(start)
-    tipo, _ = current()
-    if tipo != '$':
-        raise SyntaxError(f"Tokens extra após o fim: {tipo!r}")
-
+    # Reconstruir steps a partir da árvore para a UI
+    steps = steps_from_tree(tree)
     steps.append({
         'step':   len(steps) + 1,
         'stack':  [],

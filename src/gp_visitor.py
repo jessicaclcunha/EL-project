@@ -4,19 +4,12 @@ Gerador de Visitor Pattern para a gramática.
 
 import re
 from collections import Counter
+from gp_helpers import is_epsilon_seq
 
 
 def safe_name(nt):
     name = nt.replace("'", "_prime")
     return re.sub(r'[^A-Za-z0-9_]', '_', name)
-
-
-def is_epsilon_seq(seq):
-    """Verifica se uma sequência representa a alternativa epsilon."""
-    return (
-        not seq.symbols or
-        (len(seq.symbols) == 1 and seq.symbols[0].get_is_epsilon())
-    )
 
 
 def _seq_repr(seq):
@@ -218,15 +211,12 @@ def generate_visitor(grammar):
                 w(f'        # Alternativa única: ε — sem filhos significativos.')
                 w(f'        return ""')
             else:
-                # Única alternativa: vinculações directas + dica com bind()
                 var_names = _make_var_names(seq.symbols)
-                # via bind()
                 names_repr = ', '.join(f'"{v}"' for v in var_names)
                 vars_repr  = ', '.join(var_names)
                 w(f'        # Vincula os filhos a variáveis semânticas:')
                 w(f'        {vars_repr} = self.bind(node, {names_repr})')
                 w(f'')
-                # Alternativa manual (mais explícita), comentada
                 w(f'        # Equivalente explícito:')
                 for line in _gen_bindings(seq.symbols, var_names, indent=8):
                     w(f'        #   {line.lstrip()}')
@@ -237,7 +227,6 @@ def generate_visitor(grammar):
                 w(f'        return self.generic_visit(node)  # ex: return {ret_hint}')
 
         else:
-            # Múltiplas alternativas
             eps_idx = next(
                 (i for i, s in enumerate(seqs) if is_epsilon_seq(s)), None
             )

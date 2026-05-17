@@ -762,3 +762,207 @@ if ($('btn-sparql-custom')) {
 $('btn-example').addEventListener('click', () => {
   $('grammar').value = EXAMPLE;
 });
+
+
+if ($('btn-suggest-visitor')) {
+  $('btn-suggest-visitor').addEventListener('click', async () => {
+    const btn  = $('btn-suggest-visitor');
+    const src  = $('grammar').value.trim();
+    const name = ($('ontology-name').value || '').trim() || 'GramaticaUtilizador';
+
+    if (!src) {
+      showBanners('ontology-banners', ['Introduz uma gramática primeiro.'], 'warn');
+      return;
+    }
+
+    setLoading(btn, true);
+    try {
+      // 1. Correr a query estrutura_visitor via /api/ontology/query
+      const d = await post('/api/ontology/query', {
+        grammar:   src,
+        name:      name,
+        query_key: 'estrutura_visitor',
+      });
+
+      if (!d.ok) {
+        showBanners('ontology-banners', d.errors || ['Erro ao consultar ontologia.'], 'error');
+        return;
+      }
+
+      // Actualizar Turtle se vier
+      if (d.turtle) {
+        lastTurtle = d.turtle;
+        if ($('ontology-code')) $('ontology-code').textContent = d.turtle;
+        if ($('btn-dl-ontology')) $('btn-dl-ontology').disabled = false;
+        $('ontology-empty').style.display  = 'none';
+        $('ontology-result').style.display = 'block';
+      }
+
+      // 2. Transformar linhas SPARQL em esqueleto Python
+      const skeleton = _buildVisitorSkeleton(d.rows, d.columns);
+
+      // 3. Pré-preencher o editor de visitor e mudar para essa aba
+      if (skeleton) {
+        setVisitorCode(skeleton);
+        if (visitorEditor) visitorEditor.refresh();
+
+        // Activar aba Testar frase → Visitor
+        showTab('phrase');
+        setActiveSubTab('visitor');
+        if ($('visitor-empty'))  $('visitor-empty').style.display  = 'none';
+        if ($('visitor-result')) $('visitor-result').style.display = 'block';
+
+        showBanners('visitor-banners',
+          ['Esqueleto gerado a partir da ontologia. Completa os métodos visit_*.'], 'ok');
+        showBanners('ontology-banners',
+          ['Esqueleto do visitor pré-preenchido no editor.'], 'ok');
+      } else {
+        showBanners('ontology-banners',
+          ['Não foi possível gerar o esqueleto: ontologia sem dados de produção.'], 'warn');
+      }
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+}
+
+
+function _buildVisitorSkeleton(rows, columns) {
+  if (!rows || !rows.length) return '';
+
+  // Agrupar por NT
+  const byNT = {};
+  const ntOrder = [];
+  for (const row of rows) {
+    const nt = row['ntNome'] || row[columns[0]] || '';
+    if (!nt) continue;
+    if (!byNT[nt]) { byNT[nt] = []; ntOrder.push(nt); }
+    byNT[nt].push(row);
+  }
+
+  const lines = [];
+  const w = s => lines.push(s);
+
+  w('"""');
+  w('Visitor gerado a partir da ontologia pelo Grammar Playground.');
+  w('');
+  w('Completa cada método visit_NT substituindo o "return ..." pelo');
+  w('resultado pretendido (avaliação, geração de código, etc.).');
+  w('"""');
+  w('');
+  w('class Visitor:');
+  w('    def visit(self, node):');
+  w('        if node.lexema is not None: return node.lexema');
+  w('        if node.label == "ε": return ""');
+  w('        method = getattr(self, "visit_" + node.label, self.generic_visit)');
+  w('        return method(node)');
+  w('');
+  w('    def generic_visit(self, node):');
+  w('        parts = [str(self.visit(c)) for c in node.children');
+  w('                 if self.visit(c) not in (None, "")]');
+  w('        return " ".join(parts)');
+  w('');
+  w('');
+  w('class CodeGen(Visitor):');
+  w('');
+
+  for (const nt of ntOrder) {
+    const alts = byNT[nt];
+    const fnName = nt.replace(/'/g, '_prime').replace(/[^A-Za-z0-9_]/g, '_');
+
+    w(`    # ${'─'.repeat(56)}`);
+    w(`    def visit_${fnName}(self, node):`);
+
+    // Separar alternativas epsilon das restantes
+    const nonEps = alts.filter(r => r['eNulo'] !== 'true' && r['simbolos']);
+    const hasEps  = alts.some(r => r['eNulo'] === 'true');
+
+    if (nonEps.length === 0) {
+      // Só epsilon
+      w(`        return ""`);
+    } else if (nonEps.length === 1 && !hasEps) {
+      // Única alternativa não-epsilon
+      const syms = (nonEps[0]['simbolos'] || '').trim().split(/\s+/).filter(Boolean);
+      if (syms.length) {
+        const vars = _makeVarNames(syms);
+        w(`        # ${nt} → ${syms.join(' ')}`);
+        w(`        # Filhos: ${vars.join(', ')}`);
+        for (let i = 0; i < syms.length; i++) {
+          const isUpper = syms[i] === syms[i].toUpperCase() && syms[i].length > 1;
+          if (isUpper) {
+            w(`        ${vars[i]} = node.children[${i}].lexema   # terminal ${syms[i]}`);
+          } else {
+            w(`        ${vars[i]} = self.visit(node.children[${i}])  # ${syms[i]}`);
+          }
+        }
+        w(`        return self.generic_visit(node)  # ex: return ${vars[0]}`);
+      } else {
+        w(`        return self.generic_visit(node)`);
+      }
+    } else {
+      // Múltiplas alternativas
+      let first = true;
+      for (const alt of nonEps) {
+        const syms = (alt['simbolos'] || '').trim().split(/\s+/).filter(Boolean);
+        const la   = (alt['altLookahead'] || '').split(',').map(s => s.trim()).filter(Boolean);
+        const kw   = first ? 'if' : 'elif';
+        first = false;
+
+        const cond = la.length
+          ? la.map(t => `node.children and node.children[0].label == "${t.replace(/"/g,'')}"`)
+              .join(' or ')
+          : 'True';
+
+        w(`        ${kw} ${cond}:`);
+        w(`            # ${nt} → ${syms.join(' ')}`);
+        if (syms.length) {
+          const vars = _makeVarNames(syms);
+          for (let i = 0; i < syms.length; i++) {
+            const isUpper = syms[i] === syms[i].toUpperCase() && syms[i].length > 1;
+            if (isUpper) {
+              w(`            ${vars[i]} = node.children[${i}].lexema`);
+            } else {
+              w(`            ${vars[i]} = self.visit(node.children[${i}])`);
+            }
+          }
+          w(`            return self.generic_visit(node)  # ex: return ${vars[0]}`);
+        } else {
+          w(`            return self.generic_visit(node)`);
+        }
+        w('');
+      }
+      if (hasEps) {
+        w(`        else:  # ε`);
+        w(`            return ""`);
+      } else {
+        w(`        else:`);
+        w(`            raise ValueError(f"visit_${fnName}: alternativa desconhecida")`);
+      }
+    }
+    w('');
+  }
+
+  return lines.join('\n');
+}
+
+
+/** Gera nomes de variáveis a partir de símbolos, resolvendo colisões. */
+function _makeVarNames(syms) {
+  const raw = syms.map(s => {
+    // terminal em maiúsculas → minúsculas
+    if (s === s.toUpperCase() && s.length > 1) return s.toLowerCase();
+    // PascalCase → snake_case
+    return s.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+             .replace(/'/g, '_prime').replace(/[^a-z0-9_]/g, '_');
+  });
+  const counts = {};
+  raw.forEach(n => { counts[n] = (counts[n] || 0) + 1; });
+  const seen = {};
+  return raw.map(n => {
+    if (counts[n] > 1) {
+      seen[n] = (seen[n] || 0) + 1;
+      return n + seen[n];
+    }
+    return n;
+  });
+}
